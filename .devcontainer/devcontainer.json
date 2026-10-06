@@ -1,0 +1,12 @@
+{
+  "name": "Media Monitor KPw DKI",
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": {
+      "label": "Dashboard",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "bash scripts/codespace-start.sh",
+  "postStartCommand": "bash scripts/codespace-start.sh"
+}
