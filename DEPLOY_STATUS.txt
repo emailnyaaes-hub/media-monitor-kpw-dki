@@ -3,3 +3,4 @@ python Python 3.12.3
 pip selesai
 frontend selesai
 health ok
+langsung https://yeast-surgical-cgi-sphere.trycloudflare.com
