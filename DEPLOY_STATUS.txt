@@ -1,1 +1,9 @@
 mulai 08:46:38
+pip gagal: Failed to build pydantic-core
+
+[notice] A new release of pip is available: 25.3 -> 26.2.1
+[notice] To update, run: /tmp/venv/bin/python -m pip install --upgrade pip
+error: failed-wheel-build-for-install
+
+× Failed to build installable wheels for some pyproject.toml based projects
+╰─> pydantic-core
