@@ -1,3 +1,4 @@
 mulai 08:38:54
 pip gagal
 pip selesai
+frontend selesai
