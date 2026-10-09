@@ -1,1 +1,2 @@
 mulai 08:35:47
+pip gagal
