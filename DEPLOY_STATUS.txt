@@ -1,3 +1,4 @@
 mulai 09:08:04
 python Python 3.12.3
 pip selesai
+frontend selesai
