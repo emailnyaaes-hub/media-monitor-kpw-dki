@@ -40,7 +40,23 @@ PY
 note "mulai $(date -u +%H:%M:%S)"
 PY=/tmp/venv/bin/python
 if [ ! -x "$PY" ]; then
-  python3 -m venv /tmp/venv >>/tmp/monitor.log 2>&1 || note "venv gagal"
+  BASE=""
+  for candidate in python3.12 python3.11 python3.10; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      BASE="$candidate"
+      break
+    fi
+  done
+  if [ -z "$BASE" ]; then
+    sudo apt-get update >>/tmp/monitor.log 2>&1 || true
+    sudo apt-get install -y python3.11 python3.11-venv >>/tmp/monitor.log 2>&1 || note "python3.11 gagal dipasang"
+    BASE=python3.11
+  fi
+  note "python $($BASE --version 2>&1)"
+  "$BASE" -m venv /tmp/venv >>/tmp/monitor.log 2>&1 || note "venv gagal"
+fi
+if [ -x "$PY" ]; then
+  "$PY" -m pip install -U pip >>/tmp/monitor.log 2>&1 || true
 fi
 if [ -x "$PY" ]; then
   "$PY" -m pip install -r backend/requirements.txt >>/tmp/monitor.log 2>&1 || note "pip gagal: $(tail -n 8 /tmp/monitor.log)"
