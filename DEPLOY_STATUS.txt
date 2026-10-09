@@ -30,3 +30,4 @@ error: failed-wheel-build-for-install
 × Failed to build installable wheels for some pyproject.toml based projects
 ╰─> pydantic-core
 /tmp/venv/bin/python: No module named uvicorn
+selesai 08:48:08
