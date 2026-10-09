@@ -2,3 +2,4 @@ mulai 08:35:47
 pip gagal
 pip selesai
 frontend selesai
+health gagal
