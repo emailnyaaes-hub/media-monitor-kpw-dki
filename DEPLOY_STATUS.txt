@@ -8,3 +8,4 @@ error: failed-wheel-build-for-install
 × Failed to build installable wheels for some pyproject.toml based projects
 ╰─> pydantic-core
 pip selesai
+frontend selesai
