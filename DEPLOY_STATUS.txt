@@ -9,3 +9,4 @@ error: failed-wheel-build-for-install
 ╰─> pydantic-core
 pip selesai
 frontend selesai
+health gagal
