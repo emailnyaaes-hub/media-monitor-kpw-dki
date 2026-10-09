@@ -10,3 +10,23 @@ error: failed-wheel-build-for-install
 pip selesai
 frontend selesai
 health gagal
+        = help: please check if an updated version of PyO3 is available. Current version: 0.22.6
+        = help: set PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 to suppress this check and build anyway using the stable ABI
+      warning: build failed, waiting for other jobs to finish...
+      💥 maturin failed
+        Caused by: Failed to build a native library through cargo
+        Caused by: Cargo build finished with "exit status: 101": `env -u CARGO PYO3_BUILD_EXTENSION_MODULE="1" PYO3_ENVIRONMENT_SIGNATURE="cpython-3.14-64bit" PYO3_PYTHON="/tmp/venv/bin/python" PYTHON_SYS_EXECUTABLE="/tmp/venv/bin/python" "cargo" "rustc" "--profile" "release" "--features" "pyo3/extension-module" "--message-format" "json-render-diagnostics" "--manifest-path" "/tmp/pip-install-s9pksngk/pydantic-core_0e1bbdb7aeca4b44baf9245d4187d349/Cargo.toml" "--lib" "--crate-type" "cdylib"`
+      Error: command ['maturin', 'pep517', 'build-wheel', '-i', '/tmp/venv/bin/python', '--compatibility', 'off'] returned non-zero exit status 1
+      [end of output]
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+  ERROR: Failed building wheel for pydantic-core
+Failed to build pydantic-core
+
+[notice] A new release of pip is available: 25.3 -> 26.2.1
+[notice] To update, run: /tmp/venv/bin/python -m pip install --upgrade pip
+error: failed-wheel-build-for-install
+
+× Failed to build installable wheels for some pyproject.toml based projects
+╰─> pydantic-core
+/tmp/venv/bin/python: No module named uvicorn
