@@ -1,2 +1,3 @@
 mulai 09:09:51
 pip selesai
+frontend selesai
