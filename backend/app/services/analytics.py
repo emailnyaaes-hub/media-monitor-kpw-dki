@@ -10,8 +10,9 @@ from datetime import date, datetime, time, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Query, Session
 
-from app.constants import IMPACT_SCORE
+from app.constants import IMPACT_SCORE, JAKARTA_AREAS
 from app.models import ChannelPost, Issue, Mention
+from app.nlp.boolean import term_in_text
 from app.services.serialize import issue_card, loads, mention_card, quadrant
 
 STOPWORDS = {
@@ -43,6 +44,7 @@ def parse_window(
     date_to: date | None,
     platform: str | None,
     category: str | None,
+    location: str | None = None,
 ) -> dict:
     today = date.today()
     end_date = date_to or today
@@ -56,6 +58,7 @@ def parse_window(
         "end": datetime.combine(end_date, time.max),
         "platform": None if not platform or platform == "semua" else platform,
         "category": None if not category or category == "semua" else category,
+        "location": None if not location or location == "semua" else location,
     }
 
 
@@ -79,6 +82,8 @@ def apply_filters(query: Query, window: dict, model=Mention) -> Query:
         query = query.filter(model.platform == window["platform"])
     if window.get("category") and hasattr(model, "category"):
         query = query.filter(model.category == window["category"])
+    if window.get("location") and hasattr(model, "location"):
+        query = query.filter(model.location == window["location"])
     return query
 
 
@@ -102,6 +107,48 @@ def _sentiment_share(rows: list[Mention]) -> dict[str, float]:
 
 def _net(share: dict[str, float]) -> float:
     return round(share["positif"] - share["negatif"], 1)
+
+
+def category_shift(db: Session, window: dict) -> list[dict]:
+    """Selisih jumlah mention per kategori terhadap jendela sebelumnya."""
+
+    def counts(target: dict) -> Counter:
+        return Counter(row.category or "Lainnya" for row in base_query(db, target).all())
+
+    current = counts(window)
+    previous = counts(previous_window(window))
+    names = set(current) | set(previous)
+    rows = [
+        {
+            "category": name,
+            "current": current[name],
+            "previous": previous[name],
+            "delta": current[name] - previous[name],
+        }
+        for name in names
+    ]
+    rows.sort(key=lambda item: abs(item["delta"]), reverse=True)
+    return rows
+
+
+def area_counts(db: Session, window: dict) -> list[dict]:
+    """Jumlah mention yang menyebut kota administrasi. Bukan agregat BPS."""
+    grouped: dict[str, list[Mention]] = defaultdict(list)
+    for row in base_query(db, window).all():
+        if row.location in JAKARTA_AREAS:
+            grouped[row.location].append(row)
+    output = []
+    for name in JAKARTA_AREAS:
+        items = grouped.get(name, [])
+        share = _sentiment_share(items) if items else None
+        output.append(
+            {
+                "name": name,
+                "count": len(items),
+                "negatif": share["negatif"] if share else None,
+            }
+        )
+    return output
 
 
 def overview(db: Session, window: dict) -> dict:
@@ -149,6 +196,8 @@ def overview(db: Session, window: dict) -> dict:
         "top_upside": _top_stance(db, window, "upside"),
         "top_downside": _top_stance(db, window, "downside"),
         "critical_issue_list": _critical_issues(db, window),
+        "category_shift": category_shift(db, window),
+        "areas": area_counts(db, window),
     }
 
 
@@ -518,12 +567,20 @@ def search_mentions(db: Session, window: dict, params: dict) -> dict:
     rows = query.all()
     needle = (params.get("q") or "").casefold().strip()
     keyword = (params.get("keyword") or "").casefold().strip()
+    terms = [part.strip() for part in str(params.get("keywords") or "").split(",") if part.strip()]
     filtered = []
     for row in rows:
-        blob = f"{row.title} {row.text} {row.author_name} {row.source_name}".casefold()
-        if needle and needle not in blob:
+        blob = f"{row.title}\n{row.text}"
+        folded = f"{blob} {row.author_name} {row.source_name}".casefold()
+        if needle and needle not in folded:
             continue
-        if keyword and keyword not in row.keyword_matches.casefold() and keyword not in blob:
+        if keyword and keyword not in row.keyword_matches.casefold() and keyword not in folded:
+            continue
+        if terms and not any(term_in_text(term, blob) for term in terms):
+            continue
+        if params.get("weekday") not in (None, "") and row.published_at.weekday() != int(params["weekday"]):
+            continue
+        if params.get("hour") not in (None, "") and row.published_at.hour != int(params["hour"]):
             continue
         filtered.append(row)
     sort = params.get("sort") or "terbaru"

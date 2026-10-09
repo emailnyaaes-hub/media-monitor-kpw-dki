@@ -49,6 +49,12 @@ html.briefing .briefing-shift {
   padding-left: 0 !important;
 }
 
+@media print {
+  .no-print { display: none !important; }
+  .screen-fit { height: auto !important; overflow: visible !important; }
+  .briefing-shift { padding-left: 0 !important; }
+}
+
 :focus-visible {
   outline: 2px solid #c4a35a;
   outline-offset: 2px;

@@ -48,6 +48,7 @@ def mention_card(row: Mention) -> dict:
         "issue_id": row.issue_id,
         "url": row.url,
         "quotes_bi": bool(row.quotes_bi),
+        "keyword_matches": loads(row.keyword_matches),
     }
 
 

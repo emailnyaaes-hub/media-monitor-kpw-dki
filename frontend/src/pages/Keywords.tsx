@@ -34,7 +34,7 @@ const KIND_LABEL: Record<string, string> = {
 
 export default function KeywordsPage() {
   const { user } = useAuth()
-  const admin = user?.role === 'admin'
+  const admin = user?.role === 'admin' || user?.role === 'analis'
   const data = useApi<{ items: Keyword[]; queries: QueryRow[] }>('/api/keywords')
   const blocks = useApi<{ items: BlockRow[] }>('/api/blocklist')
   const [form, setForm] = useState({ term: '', category: 'Institusi', mode: 'inklusi' })

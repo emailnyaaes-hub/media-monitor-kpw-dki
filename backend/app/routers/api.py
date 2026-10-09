@@ -40,7 +40,7 @@ from app.services import analytics
 from app.services.blocklist import apply_blocklist, external_only, load_rules
 from app.services.alerts import evaluate_rules
 from app.services.pipeline import ingest, retag, status_payload
-from app.services.reports import csv_mentions, html_report, narrative, pptx_report, workbook
+from app.services.reports import csv_mentions, html_report, narrative, pptx_report, workbook, xlsx_mentions
 from app.services.serialize import alert_out, issue_detail, loads, mention_card, mention_detail
 
 router = APIRouter()
@@ -112,9 +112,10 @@ def _window(
     date_to: Optional[date] = None,
     platform: Optional[str] = None,
     category: Optional[str] = None,
+    location: Optional[str] = None,
 ) -> dict:
     try:
-        return analytics.parse_window(date_from, date_to, platform, category)
+        return analytics.parse_window(date_from, date_to, platform, category, location)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -179,10 +180,11 @@ def get_overview(
     date_to: Optional[date] = None,
     platform: Optional[str] = None,
     category: Optional[str] = None,
+    location: Optional[str] = None,
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(get_current_user),
 ):
-    window = _window(date_from, date_to, platform, category)
+    window = _window(date_from, date_to, platform, category, location)
     data = analytics.overview(db, window)
     data["active_alerts"] = [
         alert_out(row)
@@ -203,12 +205,13 @@ def get_trend(
     date_to: Optional[date] = None,
     platform: Optional[str] = None,
     category: Optional[str] = None,
+    location: Optional[str] = None,
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(get_current_user),
 ):
     if granularity not in {"day", "week", "month"}:
         raise HTTPException(status_code=400, detail="Granularitas harus day, week, atau month")
-    return {"items": analytics.trend(db, _window(date_from, date_to, platform, category), granularity)}
+    return {"items": analytics.trend(db, _window(date_from, date_to, platform, category, location), granularity)}
 
 
 @router.get("/mentions")
@@ -217,12 +220,16 @@ def get_mentions(
     date_to: Optional[date] = None,
     platform: Optional[str] = None,
     category: Optional[str] = None,
+    location: Optional[str] = None,
     q: Optional[str] = None,
     sentiment: Optional[str] = None,
     stance: Optional[str] = None,
     status: Optional[str] = None,
     source: Optional[str] = None,
     keyword: Optional[str] = None,
+    keywords: Optional[str] = None,
+    weekday: Optional[int] = None,
+    hour: Optional[int] = None,
     min_risk: Optional[float] = None,
     issue_id: Optional[int] = None,
     kpw: bool = False,
@@ -232,7 +239,7 @@ def get_mentions(
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(get_current_user),
 ):
-    window = _window(date_from, date_to, platform, category)
+    window = _window(date_from, date_to, platform, category, location)
     return analytics.search_mentions(
         db,
         window,
@@ -243,6 +250,9 @@ def get_mentions(
             "status": status,
             "source": source,
             "keyword": keyword,
+            "keywords": keywords,
+            "weekday": weekday,
+            "hour": hour,
             "min_risk": min_risk,
             "issue_id": issue_id,
             "kpw": kpw,
@@ -327,11 +337,12 @@ def get_issues(
     date_to: Optional[date] = None,
     platform: Optional[str] = None,
     category: Optional[str] = None,
+    location: Optional[str] = None,
     kpw: bool = False,
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(get_current_user),
 ):
-    return {"items": analytics.list_issues(db, _window(date_from, date_to, platform, category), kpw_only=kpw)}
+    return {"items": analytics.list_issues(db, _window(date_from, date_to, platform, category, location), kpw_only=kpw)}
 
 
 @router.get("/issues/{issue_id}")
@@ -385,10 +396,11 @@ def get_topics(
     date_to: Optional[date] = None,
     platform: Optional[str] = None,
     category: Optional[str] = None,
+    location: Optional[str] = None,
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(get_current_user),
 ):
-    return analytics.topics(db, _window(date_from, date_to, platform, category))
+    return analytics.topics(db, _window(date_from, date_to, platform, category, location))
 
 
 @router.get("/topics/related")
@@ -398,10 +410,11 @@ def get_related(
     date_to: Optional[date] = None,
     platform: Optional[str] = None,
     category: Optional[str] = None,
+    location: Optional[str] = None,
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(get_current_user),
 ):
-    return {"term": term, "items": analytics.related_words(db, _window(date_from, date_to, platform, category), term)}
+    return {"term": term, "items": analytics.related_words(db, _window(date_from, date_to, platform, category, location), term)}
 
 
 @router.get("/radar")
@@ -410,10 +423,11 @@ def get_radar(
     date_to: Optional[date] = None,
     platform: Optional[str] = None,
     category: Optional[str] = None,
+    location: Optional[str] = None,
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(get_current_user),
 ):
-    return {"items": analytics.radar(db, _window(date_from, date_to, platform, category))}
+    return {"items": analytics.radar(db, _window(date_from, date_to, platform, category, location))}
 
 
 @router.get("/policy-feedback")
@@ -422,10 +436,11 @@ def get_policy(
     date_to: Optional[date] = None,
     platform: Optional[str] = None,
     category: Optional[str] = None,
+    location: Optional[str] = None,
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(get_current_user),
 ):
-    return {"items": analytics.policy_feedback(db, _window(date_from, date_to, platform, category))}
+    return {"items": analytics.policy_feedback(db, _window(date_from, date_to, platform, category, location))}
 
 
 @router.get("/sentiment/breakdown")
@@ -434,10 +449,11 @@ def sentiment_breakdown(
     date_to: Optional[date] = None,
     platform: Optional[str] = None,
     category: Optional[str] = None,
+    location: Optional[str] = None,
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(get_current_user),
 ):
-    return {"items": analytics.category_breakdown(db, _window(date_from, date_to, platform, category))}
+    return {"items": analytics.category_breakdown(db, _window(date_from, date_to, platform, category, location))}
 
 
 @router.get("/kpw")
@@ -446,10 +462,11 @@ def get_kpw(
     date_to: Optional[date] = None,
     platform: Optional[str] = None,
     category: Optional[str] = None,
+    location: Optional[str] = None,
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(get_current_user),
 ):
-    window = _window(date_from, date_to, platform, category)
+    window = _window(date_from, date_to, platform, category, location)
     data = analytics.kpw_overview(db, window)
     data["channels"] = {"summary": [], "posts": [], "status": "dihapus", "message": ""}
     return data
@@ -461,11 +478,32 @@ def get_sources(
     date_to: Optional[date] = None,
     platform: Optional[str] = None,
     category: Optional[str] = None,
+    location: Optional[str] = None,
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(get_current_user),
 ):
-    window = _window(date_from, date_to, platform, category)
+    window = _window(date_from, date_to, platform, category, location)
     return {"media": analytics.media_ranking(db, window), "influencers": analytics.influencers(db, window)}
+
+
+@router.get("/keyword-watch")
+def get_keyword_watch(
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    platform: Optional[str] = None,
+    category: Optional[str] = None,
+    location: Optional[str] = None,
+    terms: str = "",
+    grain: str = "day",
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(get_current_user),
+):
+    if grain not in {"day", "week", "month"}:
+        raise HTTPException(status_code=400, detail="Granularitas harus day, week, atau month")
+    from app.services.keyword_watch import snapshot
+
+    selected = [part.strip() for part in terms.split(",") if part.strip()]
+    return snapshot(db, _window(date_from, date_to, platform, category, location), selected, grain)
 
 
 @router.get("/keywords")
@@ -485,7 +523,7 @@ def get_keywords(db: Session = Depends(get_db), _: CurrentUser = Depends(get_cur
 
 
 @router.post("/keywords")
-def add_keyword(body: KeywordBody, db: Session = Depends(get_db), user: CurrentUser = Depends(require_admin)):
+def add_keyword(body: KeywordBody, db: Session = Depends(get_db), user: CurrentUser = Depends(require_writer)):
     if body.mode not in {"inklusi", "eksklusi"}:
         raise HTTPException(status_code=400, detail="Mode harus inklusi atau eksklusi")
     exists = db.query(Keyword).filter(Keyword.term == body.term.strip(), Keyword.mode == body.mode).first()
@@ -495,6 +533,7 @@ def add_keyword(body: KeywordBody, db: Session = Depends(get_db), user: CurrentU
     db.add(row)
     _audit(db, user.username, "tambah_kata", "keyword", body.term, "", body.mode)
     db.commit()
+    retag(db)
     db.refresh(row)
     return {"id": row.id, "term": row.term, "category": row.category, "mode": row.mode, "is_active": row.is_active}
 
@@ -504,7 +543,7 @@ def patch_keyword(
     keyword_id: int,
     body: KeywordBody,
     db: Session = Depends(get_db),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_writer),
 ):
     row = db.get(Keyword, keyword_id)
     if row is None:
@@ -516,17 +555,19 @@ def patch_keyword(
     row.is_active = body.is_active
     _audit(db, user.username, "ubah_kata", "keyword", row.id, old, row.term)
     db.commit()
+    retag(db)
     return {"id": row.id, "term": row.term, "category": row.category, "mode": row.mode, "is_active": row.is_active}
 
 
 @router.delete("/keywords/{keyword_id}")
-def delete_keyword(keyword_id: int, db: Session = Depends(get_db), user: CurrentUser = Depends(require_admin)):
+def delete_keyword(keyword_id: int, db: Session = Depends(get_db), user: CurrentUser = Depends(require_writer)):
     row = db.get(Keyword, keyword_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Kata kunci tidak ditemukan")
     _audit(db, user.username, "hapus_kata", "keyword", row.id, row.term, "")
     db.delete(row)
     db.commit()
+    retag(db)
     return {"ok": True}
 
 
@@ -727,10 +768,11 @@ def report_summary(
     date_to: Optional[date] = None,
     platform: Optional[str] = None,
     category: Optional[str] = None,
+    location: Optional[str] = None,
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(get_current_user),
 ):
-    return narrative(db, _window(date_from, date_to, platform, category))
+    return narrative(db, _window(date_from, date_to, platform, category, location))
 
 
 @router.get("/export/mentions.csv")
@@ -739,22 +781,49 @@ def export_csv(
     date_to: Optional[date] = None,
     platform: Optional[str] = None,
     category: Optional[str] = None,
+    location: Optional[str] = None,
     q: Optional[str] = None,
     sentiment: Optional[str] = None,
     stance: Optional[str] = None,
     status: Optional[str] = None,
+    keywords: Optional[str] = None,
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(get_current_user),
 ):
     text = csv_mentions(
         db,
-        _window(date_from, date_to, platform, category),
-        {"q": q, "sentiment": sentiment, "stance": stance, "status": status, "sort": "terbaru"},
+        _window(date_from, date_to, platform, category, location),
+        {"q": q, "sentiment": sentiment, "stance": stance, "status": status, "keywords": keywords, "sort": "terbaru"},
     )
     return Response(
         content=text,
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=mention-media-monitor.csv"},
+    )
+
+
+@router.get("/export/mentions.xlsx")
+def export_mentions_xlsx(
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    platform: Optional[str] = None,
+    category: Optional[str] = None,
+    location: Optional[str] = None,
+    q: Optional[str] = None,
+    sentiment: Optional[str] = None,
+    keywords: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(get_current_user),
+):
+    payload = xlsx_mentions(
+        db,
+        _window(date_from, date_to, platform, category, location),
+        {"q": q, "sentiment": sentiment, "keywords": keywords, "sort": "terbaru"},
+    )
+    return Response(
+        content=payload,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=mention-kata-kunci.xlsx"},
     )
 
 
@@ -764,14 +833,79 @@ def export_xlsx(
     date_to: Optional[date] = None,
     platform: Optional[str] = None,
     category: Optional[str] = None,
+    location: Optional[str] = None,
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(get_current_user),
 ):
-    payload = workbook(db, _window(date_from, date_to, platform, category))
+    payload = workbook(db, _window(date_from, date_to, platform, category, location))
     return Response(
         content=payload,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=laporan-media-monitor.xlsx"},
+    )
+
+
+class DeckEdit(BaseModel):
+    id: str = Field(max_length=40)
+    action_title: str = Field(default="", max_length=240)
+    so_what: str = Field(default="", max_length=400)
+
+
+class DeckBody(BaseModel):
+    date_from: Optional[date] = None
+    date_to: Optional[date] = None
+    platform: Optional[str] = None
+    category: Optional[str] = None
+    location: Optional[str] = None
+    version: str = "lengkap"
+    appendix: bool = True
+    lang: str = "id"
+    edits: list[DeckEdit] = []
+
+
+def _deck_choices(version: str, lang: str) -> None:
+    if version not in {"ringkas", "lengkap"}:
+        raise HTTPException(status_code=400, detail="Versi harus ringkas atau lengkap")
+    if lang not in {"id", "en"}:
+        raise HTTPException(status_code=400, detail="Bahasa harus id atau en")
+
+
+@router.get("/export/deck/preview")
+def deck_preview(
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    platform: Optional[str] = None,
+    category: Optional[str] = None,
+    location: Optional[str] = None,
+    version: str = "lengkap",
+    appendix: bool = True,
+    lang: str = "id",
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(get_current_user),
+):
+    _deck_choices(version, lang)
+    from app.services.deck import build_preview
+
+    return build_preview(db, _window(date_from, date_to, platform, category, location), version, appendix, lang)
+
+
+@router.post("/export/deck.pptx")
+def export_deck(body: DeckBody, db: Session = Depends(get_db), _: CurrentUser = Depends(get_current_user)):
+    _deck_choices(body.version, body.lang)
+    from app.services.deck import render_pptx
+
+    payload, filename = render_pptx(
+        db,
+        _window(body.date_from, body.date_to, body.platform, body.category, body.location),
+        body.version,
+        body.appendix,
+        body.lang,
+        [item.model_dump() if hasattr(item, "model_dump") else item.dict() for item in body.edits],
+    )
+    return Response(
+        content=payload,
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -781,10 +915,11 @@ def export_pptx(
     date_to: Optional[date] = None,
     platform: Optional[str] = None,
     category: Optional[str] = None,
+    location: Optional[str] = None,
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(get_current_user),
 ):
-    payload = pptx_report(db, _window(date_from, date_to, platform, category))
+    payload = pptx_report(db, _window(date_from, date_to, platform, category, location))
     return Response(
         content=payload,
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -798,10 +933,11 @@ def export_html(
     date_to: Optional[date] = None,
     platform: Optional[str] = None,
     category: Optional[str] = None,
+    location: Optional[str] = None,
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(get_current_user),
 ):
-    return html_report(db, _window(date_from, date_to, platform, category))
+    return html_report(db, _window(date_from, date_to, platform, category, location))
 
 
 @router.get("/ingest/status")

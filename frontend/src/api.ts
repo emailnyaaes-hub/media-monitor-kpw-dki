@@ -31,6 +31,21 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   return response.json() as Promise<T>
 }
 
+export async function downloadPost(path: string, filename: string, body: unknown) {
+  const headers = new Headers({ 'Content-Type': 'application/json' })
+  const token = localStorage.getItem('bi-token')
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const response = await fetch(path, { method: 'POST', headers, body: JSON.stringify(body) })
+  if (!response.ok) throw new ApiError(response.status, 'Unduhan gagal')
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
 export async function downloadFile(path: string, filename: string) {
   const headers = new Headers()
   const token = localStorage.getItem('bi-token')

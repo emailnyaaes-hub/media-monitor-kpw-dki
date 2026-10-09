@@ -4,7 +4,8 @@
   "portsAttributes": {
     "8000": {
       "label": "Dashboard",
-      "onAutoForward": "notify"
+      "onAutoForward": "notify",
+      "visibility": "public"
     }
   },
   "postCreateCommand": "bash scripts/codespace-start.sh",

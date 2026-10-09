@@ -105,13 +105,37 @@ def csv_mentions(db: Session, window: dict, params: dict) -> str:
     rows = analytics.search_mentions(db, window, params)
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow(["id", "waktu", "sumber", "platform", "judul", "sentimen", "stance", "risiko", "kategori", "status", "jangkauan", "mengutip_bi", "url"])
+    writer.writerow(["id", "waktu", "sumber", "platform", "judul", "kata_kunci", "sentimen", "stance", "risiko", "kategori", "status", "jangkauan", "mengutip_bi", "url"])
     for item in rows["items"]:
         writer.writerow([
             item["id"], item["published_at"], item["source_name"], item["platform"], item["title"],
+            ", ".join(item.get("keyword_matches") or []),
             item["sentiment"], item["stance"], item["risk_score"], item["category"], item["status"],
             item["reach_estimate"], "ya" if item.get("quotes_bi") else "", item.get("url", ""),
         ])
+    return buffer.getvalue()
+
+
+def xlsx_mentions(db: Session, window: dict, params: dict) -> bytes:
+    params = {**params, "page": 1, "page_size": 1000}
+    rows = analytics.search_mentions(db, window, params)
+    book = Workbook()
+    sheet = book.active
+    sheet.title = "Mention"
+    headers = ["waktu", "judul", "sumber", "platform", "kata_kunci", "sentimen", "url"]
+    sheet.append(headers)
+    for item in rows["items"]:
+        sheet.append([
+            item["published_at"],
+            item["title"],
+            item["source_name"],
+            item["platform"],
+            ", ".join(item.get("keyword_matches") or []),
+            item["sentiment"],
+            item.get("url", ""),
+        ])
+    buffer = io.BytesIO()
+    book.save(buffer)
     return buffer.getvalue()
 
 

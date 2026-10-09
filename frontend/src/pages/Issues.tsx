@@ -29,15 +29,21 @@ export default function IssuesPage() {
       {topics.data && (
         <div className="grid gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2">
-            <h2 className="font-medium">Awan kata</h2>
-            <p className="text-xs text-muted">Klik kata untuk melihat kata yang sering muncul bersamanya.</p>
-            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-              {topics.data.words.map((word) => (
-                <button key={word.text} className="text-navy-800 dark:text-slate-100" style={{ fontSize: 12 + (word.value / max) * 22 }} onClick={() => setTerm(word.text)}>
-                  {word.text}
-                </button>
+            <h2 className="font-medium">Kata yang paling sering muncul</h2>
+            <p className="text-xs text-muted">Panjang batang adalah jumlah kemunculan. Klik kata untuk melihat kata yang sering muncul bersamanya. Pangsa nada per kata: [data perlu dilengkapi].</p>
+            <ul className="mt-3 space-y-2">
+              {topics.data.words.slice(0, 10).map((word) => (
+                <li key={word.text}>
+                  <button className="grid w-full grid-cols-[8rem_1fr_2.5rem] items-center gap-2 text-left text-sm" onClick={() => setTerm(word.text)}>
+                    <span className="truncate">{word.text}</span>
+                    <span className="h-2 bg-line" aria-hidden>
+                      <span className="block h-2 bg-navy-800" style={{ width: `${(word.value / max) * 100}%` }} />
+                    </span>
+                    <span className="text-right tabular-nums">{word.value}</span>
+                  </button>
+                </li>
               ))}
-            </div>
+            </ul>
             {term && (
               <p className="mt-3 text-sm">
                 Terkait <strong>{term}</strong>: {related.data?.items.map((item) => item.text).join(', ') || 'memuat...'}

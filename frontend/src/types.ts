@@ -36,6 +36,7 @@ export interface MentionCard {
   issue_id: number | null
   url: string
   quotes_bi: boolean
+  keyword_matches?: string[]
 }
 
 export interface MentionDetail extends MentionCard {
@@ -141,4 +142,6 @@ export interface Overview {
   top_downside: { window_label: string; items: MentionCard[] }
   critical_issue_list: IssueCard[]
   active_alerts: AlertItem[]
+  category_shift: { category: string; current: number; previous: number; delta: number }[]
+  areas: { name: string; count: number; negatif: number | null }[]
 }

@@ -7,10 +7,9 @@ import ExplorerPage from './pages/Explorer'
 import IssueDetailPage from './pages/IssueDetail'
 import IssuesPage from './pages/Issues'
 import KeywordsPage from './pages/Keywords'
-import KpwPage from './pages/Kpw'
+import KeywordWatchPage from './pages/KeywordWatch'
 import Login from './pages/Login'
 import OverviewPage from './pages/Overview'
-import RadarPage from './pages/Radar'
 import ReportsPage from './pages/Reports'
 import SentimentPage from './pages/Sentiment'
 import SettingsPage from './pages/Settings'
@@ -32,9 +31,8 @@ export default function App() {
         <Route path="/saran" element={<AdvicePage />} />
         <Route path="/sentimen" element={<SentimentPage />} />
         <Route path="/isu" element={<IssuesPage />} />
+        <Route path="/pantauan" element={<KeywordWatchPage />} />
         <Route path="/isu/:id" element={<IssueDetailPage />} />
-        <Route path="/radar" element={<RadarPage />} />
-        <Route path="/kpw" element={<KpwPage />} />
         <Route path="/sumber" element={<SourcesPage />} />
         <Route path="/explorer" element={<ExplorerPage />} />
         <Route path="/alert" element={<AlertsPage />} />

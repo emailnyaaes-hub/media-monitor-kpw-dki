@@ -72,6 +72,9 @@ KEYWORD_GROUPS = {
         "demo",
         "gangguan sistem pembayaran",
     ],
+    "Valuta asing": ["money changer", "dolar", "kupva BB", "tukar rupiah"],
+    "Regulasi/Industri": ["PJP", "penyelenggara sistem pembayaran"],
+    "Dompet digital/Fintech": ["flip", "GoPay", "DANA", "OVO"],
 }
 
 EXCLUSIONS = ["lowongan", "karir", "loker", "kode promo", "iklan baris"]
@@ -84,6 +87,10 @@ SAVED_QUERIES = [
     (
         "Paket isu sensitif",
         'hoaks OR penipuan OR "kebocoran data" OR "burden sharing" OR demo OR "gangguan"',
+    ),
+    (
+        "Paket valuta dan pembayaran",
+        '("money changer" OR dolar OR "kupva BB" OR "tukar rupiah" OR PJP OR "penyelenggara sistem pembayaran" OR flip OR GoPay OR DANA OR OVO) AND NOT (lowongan OR karir OR loker)',
     ),
 ]
 

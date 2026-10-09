@@ -13,8 +13,7 @@ import { inputClass } from './Ui'
 const NAV = [
   { to: '/', label: 'Ringkasan' },
   { to: '/isu', label: 'Isu & Tren' },
-  { to: '/radar', label: 'Policy Radar' },
-  { to: '/kpw', label: 'Monitoring KPw DKI' },
+  { to: '/pantauan', label: 'Pantauan Kata' },
   { to: '/saran', label: 'Pusat Saran' },
   { to: '/explorer', label: 'Jelajah Berita' },
   { to: '/laporan', label: 'Laporan' },
@@ -169,7 +168,7 @@ export default function Layout() {
               </div>
             </details>
             <div className="ml-auto flex items-center gap-2">
-              <button className="no-briefing h-11 rounded-md border border-line px-3 text-sm" onClick={toggleBriefing} aria-pressed={briefing}>
+              <button className="h-11 rounded-md border border-line px-3 text-sm" onClick={toggleBriefing} aria-pressed={briefing}>
                 {briefing ? 'Keluar mode briefing' : 'Mode briefing'}
               </button>
               <button className="no-briefing relative grid h-11 w-11 place-items-center rounded-md border border-line" aria-label="Notifikasi" onClick={() => navigate('/alert')}>

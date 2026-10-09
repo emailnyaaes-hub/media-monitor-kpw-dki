@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { api, downloadFile, useApi } from '../api'
+import { api, useApi } from '../api'
 import { AdviceCard, type AdviceItem } from '../components/AdviceCard'
+import DeckDialog from '../components/DeckDialog'
 import { Card, ErrorNote, Loading, PageHeader, SourceLink, inputClass } from '../components/Ui'
 import { formatWhen } from '../format'
 
@@ -29,6 +30,7 @@ export default function AdvicePage() {
   const [askResult, setAskResult] = useState<{ status: string; answer: string; evidence: { title: string; source_name: string; url: string }[] } | null>(null)
   const [sim, setSim] = useState<{ status: string; answer?: string; disclaimer: string; measured?: { total: number; negatif: number; positif: number; netral: number; catatan: string }; options?: { option: string; estimate: string; tradeoff: string; label: string }[]; evidence?: { title: string; url: string; source_name: string }[] } | null>(null)
   const [error, setError] = useState('')
+  const [deckOpen, setDeckOpen] = useState(false)
 
   async function askNow(event: React.FormEvent) {
     event.preventDefault()
@@ -70,7 +72,7 @@ export default function AdvicePage() {
       <p className="mb-3 rounded-lg border border-line bg-gold-100 px-3 py-2 text-sm text-navy-900">{data.data?.disclaimer}</p>
       <p className="mb-4 text-sm text-muted">Saran diperbarui: {data.data?.refreshed_at ? `${formatWhen(data.data.refreshed_at)} WIB` : 'belum ada siklus'}</p>
       <div className="mb-4 flex flex-wrap gap-2">
-        <button className="h-10 rounded-lg border border-line px-3 text-sm" onClick={() => downloadFile('/api/export/briefing.pptx', 'briefing-pimpinan.pptx')}>Briefing PPTX</button>
+        <button className="h-10 rounded-lg border border-line px-3 text-sm" onClick={() => setDeckOpen(true)}>Briefing PPTX</button>
         <button className="h-10 rounded-lg border border-line px-3 text-sm" onClick={() => openHtml('/api/export/briefing.html')}>Briefing cetak</button>
         <button className="h-10 rounded-lg border border-line px-3 text-sm" onClick={() => openHtml('/api/export/masukan-kebijakan.html')}>Masukan kebijakan</button>
       </div>
@@ -93,6 +95,7 @@ export default function AdvicePage() {
         {data.data?.items.map((item) => <AdviceCard key={item.id} item={item} onChanged={data.reload} />)}
         {data.data && data.data.items.length === 0 && <p className="text-sm text-muted">Tidak ada saran pada filter ini.</p>}
       </div>
+      {deckOpen && <DeckDialog onClose={() => setDeckOpen(false)} />}
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card>
           <h2 className="font-medium">Tanya AI</h2>

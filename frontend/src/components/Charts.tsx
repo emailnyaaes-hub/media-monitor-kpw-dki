@@ -5,7 +5,10 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
+  Line,
   Legend,
+  LineChart,
   Pie,
   PieChart,
   ReferenceLine,
@@ -73,7 +76,59 @@ export function TrendChart({ data, onPick }: { data: TrendPoint[]; onPick: (day:
   )
 }
 
-export function Donut({ positif, netral, negatif }: { positif: number; netral: number; negatif: number }) {
+function SpikeDot(props: { cx?: number; cy?: number; payload?: TrendPoint }) {
+  const { cx, cy, payload } = props
+  if (!payload?.spike || cx == null || cy == null) return <g />
+  return (
+    <g>
+      <title>Lonjakan</title>
+      <polygon points={`${cx},${cy - 9} ${cx - 5},${cy} ${cx + 5},${cy}`} fill={NEG} />
+    </g>
+  )
+}
+
+export function VolumeChart({ data, onPick, className = 'h-72' }: { data: TrendPoint[]; onPick?: (day: string) => void; className?: string }) {
+  const chrome = useChrome()
+  const totals = data.map((item) => item.total)
+  const mean = totals.length ? totals.reduce((sum, value) => sum + value, 0) / totals.length : 0
+  return (
+    <div className={className}>
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart
+          data={data}
+          margin={{ top: 16, right: 8, left: 0, bottom: 0 }}
+          onClick={(state) => {
+            const label = (state as { activeLabel?: string } | null)?.activeLabel
+            if (label && onPick) onPick(String(label))
+          }}
+        >
+          <CartesianGrid stroke={chrome.grid} vertical={false} />
+          <XAxis dataKey="date" tickFormatter={formatDay} tick={{ fill: chrome.text, fontSize: 11 }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fill: chrome.text, fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
+          <Tooltip
+            contentStyle={chrome.tooltip}
+            labelFormatter={(label) => formatDay(String(label))}
+            formatter={(value, name, item) => {
+              if (name === 'total') return ['', '']
+              const spike = (item?.payload as TrendPoint | undefined)?.spike
+              return [value as number, spike && name === 'Negatif' ? 'Negatif · lonjakan' : (name as string)]
+            }}
+          />
+          <Legend />
+          <Bar dataKey="positif" name="Positif" stackId="1" fill={POS} />
+          <Bar dataKey="netral" name="Netral" stackId="1" fill={NET} />
+          <Bar dataKey="negatif" name="Negatif" stackId="1" fill={NEG} />
+          {totals.length >= 5 && (
+            <ReferenceLine y={mean} stroke={chrome.text} strokeDasharray="4 4" label={{ value: 'Rata-rata', fill: chrome.text, fontSize: 11, position: 'insideTopRight' }} />
+          )}
+          <Line dataKey="total" name="total" stroke="transparent" dot={SpikeDot} legendType="none" activeDot={false} />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+export function Donut({ positif, netral, negatif, onPick }: { positif: number; netral: number; negatif: number; onPick?: (name: string) => void }) {
   const chrome = useChrome()
   const data = [
     { name: 'Positif', value: positif, color: POS },
@@ -84,7 +139,7 @@ export function Donut({ positif, netral, negatif }: { positif: number; netral: n
     <div className="h-64">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
-          <Pie data={data} dataKey="value" nameKey="name" innerRadius={58} outerRadius={84} paddingAngle={2}>
+          <Pie data={data} dataKey="value" nameKey="name" innerRadius={58} outerRadius={84} paddingAngle={2} onClick={(item) => onPick?.(String((item as { name?: string }).name || ''))}>
             {data.map((item) => <Cell key={item.name} fill={item.color} />)}
           </Pie>
           <Tooltip contentStyle={chrome.tooltip} formatter={(value) => `${value}%`} />
@@ -154,6 +209,70 @@ export function MatrixChart({ items }: { items: IssueCard[] }) {
             <Scatter key={group.key} name={group.name} data={items.filter((item) => item.stance === group.key)} fill={group.fill} />
           ))}
         </ScatterChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+export function KeywordLines({
+  data,
+  series,
+  onPick,
+  className = 'h-72',
+}: {
+  data: Record<string, string | number>[]
+  series: { term: string; color: string }[]
+  onPick?: (term: string, date?: string) => void
+  className?: string
+}) {
+  const chrome = useChrome()
+  return (
+    <div className={className}>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart
+          data={data}
+          margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+          onClick={(state) => {
+            const payload = (state as { activeLabel?: string; activePayload?: { dataKey?: string }[] } | null)
+            const key = payload?.activePayload?.[0]?.dataKey
+            if (key && onPick) onPick(String(key), payload?.activeLabel ? String(payload.activeLabel) : undefined)
+          }}
+        >
+          <CartesianGrid stroke={chrome.grid} vertical={false} />
+          <XAxis dataKey="date" tickFormatter={formatDay} tick={{ fill: chrome.text, fontSize: 11 }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fill: chrome.text, fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
+          <Tooltip contentStyle={chrome.tooltip} labelFormatter={(label) => formatDay(String(label))} />
+          {series.map((item) => (
+            <Line key={item.term} type="monotone" dataKey={item.term} stroke={item.color} strokeWidth={2} dot={{ r: 3 }} />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+export function KeywordBars({
+  data,
+  onPick,
+  className = 'h-72',
+}: {
+  data: { term: string; count: number; color: string }[]
+  onPick?: (term: string) => void
+  className?: string
+}) {
+  const chrome = useChrome()
+  return (
+    <div className={className}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16 }}>
+          <CartesianGrid stroke={chrome.grid} horizontal={false} />
+          <XAxis type="number" tick={{ fill: chrome.text, fontSize: 11 }} allowDecimals={false} />
+          <YAxis type="category" dataKey="term" width={150} tick={{ fill: chrome.text, fontSize: 11 }} />
+          <Tooltip contentStyle={chrome.tooltip} />
+          <Bar dataKey="count" name="Jumlah" onClick={(item) => onPick?.(String((item as { term?: string }).term || ''))}>
+            {data.map((item) => <Cell key={item.term} fill={item.color} />)}
+          </Bar>
+        </BarChart>
       </ResponsiveContainer>
     </div>
   )

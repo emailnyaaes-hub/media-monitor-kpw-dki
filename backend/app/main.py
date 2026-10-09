@@ -33,6 +33,11 @@ async def lifespan(_: FastAPI):
 
         ensure_defaults(db)
         apply_blocklist(db)
+        from app.services.keyword_watch import ensure_watch_keywords
+        from app.services.pipeline import retag
+
+        if ensure_watch_keywords(db):
+            retag(db)
         from app.services.dss import refresh_advices
 
         refresh_advices(db)
