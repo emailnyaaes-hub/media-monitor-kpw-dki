@@ -38,9 +38,15 @@ PY
 
 : >/tmp/status.txt
 note "mulai $(date -u +%H:%M:%S)"
-python3 -m pip install --user --break-system-packages -r backend/requirements.txt >>/tmp/monitor.log 2>&1 \
-  || python3 -m pip install --user -r backend/requirements.txt >>/tmp/monitor.log 2>&1 \
-  || note "pip gagal"
+PY=/tmp/venv/bin/python
+if [ ! -x "$PY" ]; then
+  python3 -m venv /tmp/venv >>/tmp/monitor.log 2>&1 || note "venv gagal"
+fi
+if [ -x "$PY" ]; then
+  "$PY" -m pip install -r backend/requirements.txt >>/tmp/monitor.log 2>&1 || note "pip gagal: $(tail -n 8 /tmp/monitor.log)"
+else
+  note "pip gagal: python venv tidak ada"
+fi
 note "pip selesai"
 if [ ! -f frontend/dist/index.html ]; then
   npm ci --prefix frontend >>/tmp/monitor.log 2>&1 || note "npm ci gagal"
@@ -48,7 +54,7 @@ if [ ! -f frontend/dist/index.html ]; then
 fi
 note "frontend selesai"
 if ! curl -sf http://127.0.0.1:8000/api/health >/dev/null; then
-  (cd backend && nohup python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 >>/tmp/monitor.log 2>&1 &)
+  (cd backend && nohup "$PY" -m uvicorn app.main:app --host 0.0.0.0 --port 8000 >>/tmp/monitor.log 2>&1 &)
 fi
 for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
   curl -sf http://127.0.0.1:8000/api/health >/dev/null && break
