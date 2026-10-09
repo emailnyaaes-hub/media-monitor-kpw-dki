@@ -10,3 +10,4 @@ Failing command: /tmp/venv/bin/python3.12
 /tmp/venv/bin/python: No module named pip
 /tmp/venv/bin/python: No module named pip
 pip selesai
+frontend selesai
