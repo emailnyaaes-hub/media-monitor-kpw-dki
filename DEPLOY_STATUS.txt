@@ -1,2 +1,3 @@
 mulai 08:48:29
 python Python 3.12.3
+venv gagal
