@@ -3,3 +3,23 @@ pip gagal
 pip selesai
 frontend selesai
 health gagal
+npm notice
+
+> bi-media-monitor@0.1.0 build
+> tsc --noEmit && vite build
+
+vite v6.4.3 building for production...
+transforming...
+✓ 2284 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.96 kB │ gzip:   0.54 kB
+dist/assets/index-BATHEuIx.css   21.90 kB │ gzip:   5.08 kB
+dist/assets/index-CuULrvE_.js   833.53 kB │ gzip: 233.81 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 7.98s
+/home/codespace/.python/current/bin/python3: No module named uvicorn
