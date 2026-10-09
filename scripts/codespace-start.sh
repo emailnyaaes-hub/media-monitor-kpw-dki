@@ -87,7 +87,23 @@ else
   note "health gagal"
   note "$(tail -n 20 /tmp/monitor.log 2>/dev/null || true)"
 fi
-if [ -n "${CODESPACE_NAME:-}" ] && command -v gh >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1; then
-  timeout 20 gh codespace ports visibility 8000:public -c "$CODESPACE_NAME" >>/tmp/monitor.log 2>&1 || note "port publik gagal"
+if [ ! -x /tmp/cloudflared ]; then
+  curl -fsSL -o /tmp/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 >>/tmp/monitor.log 2>&1 || note "unduh tunnel gagal"
+  chmod +x /tmp/cloudflared 2>/dev/null || true
+fi
+if [ -x /tmp/cloudflared ]; then
+  nohup /tmp/cloudflared tunnel --url http://127.0.0.1:8000 --no-autoupdate > /tmp/tunnel.log 2>&1 &
+fi
+direct=""
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+  direct="$(grep -oE 'https://[-a-z0-9]+\.trycloudflare.com' /tmp/tunnel.log 2>/dev/null | head -n 1 || true)"
+  [ -n "$direct" ] && break
+  sleep 2
+done
+if [ -n "$direct" ]; then
+  note "langsung $direct"
+else
+  note "langsung gagal"
+  note "$(tail -n 12 /tmp/tunnel.log 2>/dev/null || true)"
 fi
 note "selesai $(date -u +%H:%M:%S)"
