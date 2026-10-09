@@ -1,3 +1,11 @@
 mulai 08:48:29
 python Python 3.12.3
 venv gagal
+pip gagal: 
+You may need to use sudo with that command.  After installing the python3-venv
+package, recreate your virtual environment.
+
+Failing command: /tmp/venv/bin/python3.12
+
+/tmp/venv/bin/python: No module named pip
+/tmp/venv/bin/python: No module named pip
