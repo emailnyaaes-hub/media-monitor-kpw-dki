@@ -23,3 +23,4 @@ dist/assets/index-CuULrvE_.js   833.53 kB │ gzip: 233.81 kB
 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
 ✓ built in 7.56s
 /home/codespace/.python/current/bin/python3: No module named uvicorn
+selesai 08:21:44
