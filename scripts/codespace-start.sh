@@ -53,7 +53,12 @@ if [ ! -x "$PY" ]; then
     BASE=python3.11
   fi
   note "python $($BASE --version 2>&1)"
-  "$BASE" -m venv /tmp/venv >>/tmp/monitor.log 2>&1 || note "venv gagal"
+  if ! "$BASE" -m venv /tmp/venv >>/tmp/monitor.log 2>&1; then
+    sudo apt-get update >>/tmp/monitor.log 2>&1 || true
+    sudo apt-get install -y python3-venv "${BASE}-venv" >>/tmp/monitor.log 2>&1 || note "venv paket gagal"
+    rm -rf /tmp/venv
+    "$BASE" -m venv /tmp/venv >>/tmp/monitor.log 2>&1 || note "venv gagal: $(tail -n 6 /tmp/monitor.log)"
+  fi
 fi
 if [ -x "$PY" ]; then
   "$PY" -m pip install -U pip >>/tmp/monitor.log 2>&1 || true
