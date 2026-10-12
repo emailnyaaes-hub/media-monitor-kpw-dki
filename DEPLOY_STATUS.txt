@@ -1,1 +1,2 @@
 mulai 06:37:55
+python Python 3.12.3
