@@ -1007,7 +1007,7 @@ def post_advice_action(
     advice_id: int,
     body: AdviceAction,
     db: Session = Depends(get_db),
-    user: CurrentUser = Depends(require_writer),
+    user: CurrentUser = Depends(get_current_user),
 ):
     from app.services.dss import act
 

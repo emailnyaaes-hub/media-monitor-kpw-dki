@@ -42,10 +42,10 @@ function useChrome() {
   }
 }
 
-export function TrendChart({ data, onPick }: { data: TrendPoint[]; onPick: (day: string) => void }) {
+export function TrendChart({ data, onPick, className = 'h-72' }: { data: TrendPoint[]; onPick: (day: string) => void; className?: string }) {
   const chrome = useChrome()
   return (
-    <div className="h-72">
+    <div className={className}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={data}

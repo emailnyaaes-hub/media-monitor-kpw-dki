@@ -1,11 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApi } from '../api'
 import type { AdviceItem } from '../components/AdviceCard'
-import { Donut, VolumeChart } from '../components/Charts'
-import { Card, Empty, ErrorNote, Help, Loading, QuoteBadge, RiskBar, SourceLink, StanceBadge } from '../components/Ui'
+import { priorityOf } from '../components/AdviceCard'
+import { Donut, TrendChart } from '../components/Charts'
+import BackToGeneral from '../components/BackToGeneral'
+import RecommendationDrawer from '../components/RecommendationDrawer'
+import { Card, Empty, ErrorNote, Loading, QuoteBadge, RiskBar, SourceLink, StanceBadge } from '../components/Ui'
 import { useFilters } from '../filters'
-import { formatDay, formatNumber, formatPct, formatReach, formatSigned, PLATFORM_LABEL, relativeTime } from '../format'
+import { formatNumber, formatPct, formatReach, formatSigned, PLATFORM_LABEL, relativeTime } from '../format'
 import type { IssueCard, Overview, TrendPoint } from '../types'
 import { AlertTriangle, ArrowDown, ArrowUp, Check, Minus } from 'lucide-react'
 
@@ -13,7 +16,10 @@ export default function OverviewPage() {
   const filters = useFilters()
   const navigate = useNavigate()
   const [grain, setGrain] = useState<'day' | 'week' | 'month'>('day')
-  const [tab, setTab] = useState<'perhatian' | 'grafik' | 'komposisi' | 'saran'>('perhatian')
+  const [panel, setPanel] = useState<null | 'komposisi' | 'volume' | 'alert' | 'wilayah' | 'contoh'>(null)
+  const [issue, setIssue] = useState<IssueCard | null>(null)
+  const [picked, setPicked] = useState<AdviceItem | null>(null)
+  const [tour, setTour] = useState(() => localStorage.getItem('bi-rek-tour') !== '1')
   const overview = useApi<Overview>(`/api/overview?${filters.query}`)
   const issues = useApi<{ items: IssueCard[] }>(`/api/issues?${filters.query}`)
   const advice = useApi<{ refreshed_at: string | null; disclaimer: string; items: AdviceItem[] }>('/api/advices?top=3')
@@ -26,9 +32,7 @@ export default function OverviewPage() {
 
   function openDay(day: string) {
     if (grain !== 'day') return
-    filters.setDateFrom(day)
-    filters.setDateTo(day)
-    navigate('/explorer')
+    filters.focusDay(day, '/')
   }
 
   const critical = data?.kpis.critical_issues.value || 0
@@ -43,12 +47,8 @@ export default function OverviewPage() {
     ? 'Volume mention pada rentang ini'
     : `Volume mention ${volumeDelta >= 0 ? 'naik' : 'turun'} ${formatPct(Math.abs(volumeDelta))} dibanding periode sebelumnya`
 
-  const tabs = [
-    ['perhatian', 'Perlu perhatian'],
-    ['grafik', 'Grafik'],
-    ['komposisi', 'Komposisi'],
-    ['saran', 'Saran'],
-  ] as const
+  const alerts = data?.active_alerts || []
+  const suggestions = advice.data?.items || []
 
   return (
     <div className="flex flex-col gap-2 md:h-[calc(100dvh-12.5rem)] md:overflow-hidden">
@@ -65,122 +65,158 @@ export default function OverviewPage() {
       {overview.error && <ErrorNote message={overview.error} />}
       {data && (
         <>
-          <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
-            <Metric label="Total mention" value={formatNumber(data.kpis.total_mention.value)} delta={data.kpis.total_mention.delta_pct} />
-            <Metric label="Sentimen bersih" value={formatNumber(data.kpis.net_sentiment.value)} delta={data.kpis.net_sentiment.delta_points} suffix="" help="Persen positif dikurangi persen negatif." />
-            <Metric label="Isu kritis" value={formatNumber(data.kpis.critical_issues.value)} delta={data.kpis.critical_issues.delta_pct} />
-            <button className="border border-line bg-card px-3 py-2 text-left" onClick={() => setTab('komposisi')}>
-              <p className="text-xs text-muted">Komposisi sentimen</p>
-              <p className="mt-1 text-sm">positif {formatPct(data.kpis.sentiment_pct.positif)} · netral {formatPct(data.kpis.sentiment_pct.netral)} · negatif {formatPct(data.kpis.sentiment_pct.negatif)}</p>
-            </button>
+          {tour && (
+            <div className="flex flex-wrap items-center gap-3 border border-line bg-card px-3 py-2 text-sm">
+              <p>1. Baca angka di atas. 2. Klik grafik atau isu untuk rincian. 3. Setujui, edit, atau abaikan rekomendasi. Keputusan tetap di pimpinan.</p>
+              <button className="h-8 rounded-md border border-line px-2" onClick={() => { localStorage.setItem('bi-rek-tour', '1'); setTour(false) }}>Mengerti</button>
+            </div>
+          )}
+          <div className="grid grid-cols-3 gap-2">
+            <Metric label="Positif, netral, negatif" value={`${formatPct(data.kpis.sentiment_pct.positif)} / ${formatPct(data.kpis.sentiment_pct.netral)} / ${formatPct(data.kpis.sentiment_pct.negatif)}`} onClick={() => setPanel('komposisi')} />
+            <Metric label="Volume percakapan" value={formatNumber(data.kpis.total_mention.value)} delta={data.kpis.total_mention.delta_pct} help="Jumlah berita dan unggahan pihak luar pada rentang ini." onClick={() => setPanel('volume')} />
+            <Metric label="Alert aktif" value={formatNumber(alerts.length)} onClick={() => setPanel('alert')} />
           </div>
-          <div className="flex gap-1 border-b border-line">
-            {tabs.map(([id, label]) => (
-              <button key={id} className={`h-9 px-3 text-sm ${tab === id ? 'border-b-2 border-navy-900 font-medium' : 'text-muted'}`} onClick={() => setTab(id)}>
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="min-h-0 flex-1 overflow-hidden">
-            {tab === 'perhatian' && (
-              <section className="h-full overflow-auto">
-                {attention.length === 0 && <Empty label="Belum ada isu pada filter ini. Coba perluas rentang tanggal." />}
-                <ul className="divide-y divide-line border-y border-line">
-                  {attention.map((issue) => (
-                    <li key={issue.id} className="flex items-center gap-3 py-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{issue.title}</p>
-                        <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
-                          <StanceBadge stance={issue.stance} />
-                          <span>{issue.mention_count} sumber</span>
-                          <span>{issue.category}</span>
-                        </p>
-                      </div>
-                      <span className="hidden text-sm sm:inline" title="Skor risiko menggabungkan nada, kecepatan sebar, dan kredibilitas sumber. Bukan keputusan.">
-                        Risiko <RiskBar score={issue.risk_score} />
-                      </span>
-                      <button className="h-9 shrink-0 rounded-md bg-navy-900 px-3 text-sm text-white" onClick={() => navigate(`/isu/${issue.id}`)}>Lihat</button>
+          <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-5">
+            <section className="flex min-h-0 flex-col border border-line bg-card p-3 lg:col-span-3">
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-sm font-medium">{trendTitle}</h2>
+                <div className="flex gap-1">
+                  {(['day', 'week', 'month'] as const).map((item) => (
+                    <button key={item} className={`h-8 rounded-md px-2 text-xs ${grain === item ? 'bg-navy-900 text-white' : 'border border-line'}`} onClick={() => setGrain(item)}>
+                      {item === 'day' ? 'Harian' : item === 'week' ? 'Mingguan' : 'Bulanan'}
+                    </button>
+                  ))}
+                  <button className="h-8 rounded-md border border-line px-2 text-xs" onClick={() => setPanel('wilayah')}>Wilayah</button>
+                </div>
+              </div>
+              <p className="mb-1 text-xs text-muted">Klik satu hari untuk menyaring berita pada tanggal itu. Segitiga menandai lonjakan.</p>
+              <BackToGeneral />
+              {trend.length === 0 ? <Empty label="Belum ada percakapan pada rentang ini." /> : <TrendChart className="h-52 min-h-0 flex-1 lg:h-auto" data={trend} onPick={openDay} />}
+            </section>
+            <div className="grid min-h-0 gap-2 lg:col-span-2">
+              <section className="min-h-0 overflow-auto border border-line bg-card p-3">
+                <h2 className="text-sm font-medium">Perlu perhatian sekarang</h2>
+                {attention.length === 0 && <p className="mt-2 text-sm text-muted">Tidak ada isu pada filter ini.</p>}
+                <ul className="mt-1 divide-y divide-line">
+                  {attention.slice(0, 3).map((item) => (
+                    <li key={item.id}>
+                      <button className="w-full py-2 text-left" onClick={() => setIssue(item)}>
+                        <span className="line-clamp-2 text-sm font-medium">{item.title}</span>
+                        <span className="mt-1 flex items-center gap-2 text-xs text-muted"><StanceBadge stance={item.stance} />{item.mention_count} sumber</span>
+                      </button>
                     </li>
                   ))}
                 </ul>
               </section>
-            )}
-            {tab === 'grafik' && (
-              <div className="grid h-full min-h-[16rem] gap-2 lg:grid-cols-5">
-                <section className="flex min-h-0 flex-col border border-line bg-card p-3 lg:col-span-3">
-                  <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-                    <h2 className="text-sm font-medium">{trendTitle}</h2>
-                    <div className="flex gap-1">
-                      {(['day', 'week', 'month'] as const).map((item) => (
-                        <button key={item} className={`h-8 rounded-md px-2 text-xs ${grain === item ? 'bg-navy-900 text-white' : 'border border-line'}`} onClick={() => setGrain(item)}>
-                          {item === 'day' ? 'Harian' : item === 'week' ? 'Mingguan' : 'Bulanan'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <p className="mb-1 text-xs text-muted">Klik satu hari untuk membuka berita pada tanggal itu.</p>
-                  {trend.length === 0 ? <Empty label="Belum ada mention pada rentang ini." /> : <VolumeChart className="h-52 min-h-0 flex-1 lg:h-auto" data={trend} onPick={openDay} />}
-                </section>
-                <CategoryShift rows={data.category_shift} />
-              </div>
-            )}
-            {tab === 'komposisi' && (
-              <div className="grid h-full min-h-0 gap-2 overflow-auto lg:grid-cols-2">
-                <section className="border border-line bg-card p-3">
-                  <h2 className="text-sm font-medium">Komposisi kini dan periode lalu</h2>
-                  <Donut positif={data.kpis.sentiment_pct.positif} netral={data.kpis.sentiment_pct.netral} negatif={data.kpis.sentiment_pct.negatif} />
-                  <div className="space-y-3">
-                    <ShareBar label={`${formatDay(data.period.from)}–${formatDay(data.period.to)}`} positif={data.kpis.sentiment_pct.positif} netral={data.kpis.sentiment_pct.netral} negatif={data.kpis.sentiment_pct.negatif} />
-                    <ShareBar label={`${formatDay(data.previous_period.from)}–${formatDay(data.previous_period.to)}`} positif={data.kpis.sentiment_pct.previous.positif} netral={data.kpis.sentiment_pct.previous.netral} negatif={data.kpis.sentiment_pct.previous.negatif} />
-                  </div>
-                  <p className="mt-2 text-xs text-muted">Pembanding nasional dan provinsi lain: [data perlu dilengkapi].</p>
-                </section>
-                <AreaBars areas={data.areas} />
-              </div>
-            )}
-            {tab === 'saran' && (
-              <div className="grid h-full min-h-0 gap-2 overflow-auto lg:grid-cols-2">
-                <section className="border border-line bg-card p-3">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <h2 className="text-sm font-medium">Saran tindakan</h2>
-                    <button className="text-sm underline" onClick={() => navigate('/saran')}>Buka Pusat Saran</button>
-                  </div>
-                  <p className="text-xs text-muted">{advice.data?.disclaimer}</p>
-                  <ul className="mt-2 divide-y divide-line">
-                    {(advice.data?.items || []).map((item) => (
-                      <li key={item.id} className="flex items-center gap-2 py-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm">{item.title}</p>
-                          <p className="truncate text-xs text-muted">{item.insufficient ? 'Data belum cukup, perlu verifikasi.' : item.recommendation}</p>
-                        </div>
-                        <button className="h-8 shrink-0 rounded-md border border-line px-2 text-xs" onClick={() => navigate('/saran')}>Tinjau</button>
-                      </li>
-                    ))}
-                    {advice.data && advice.data.items.length === 0 && <li className="py-2 text-sm text-muted">Belum ada saran dengan bukti pada siklus ini.</li>}
-                  </ul>
-                </section>
-                <div className="grid min-h-0 gap-2">
-                  <StoryPanel title="Upside" note={data.top_upside.window_label} items={data.top_upside.items.slice(0, 3)} />
-                  <StoryPanel title="Downside" note={data.top_downside.window_label} items={data.top_downside.items.slice(0, 3)} />
+              <section className="min-h-0 overflow-auto border border-line bg-card p-3">
+                <div className="flex items-baseline justify-between gap-2">
+                  <h2 className="text-sm font-medium">Rekomendasi tindak lanjut</h2>
+                  <span className="text-xs text-muted">Disusun otomatis</span>
                 </div>
-              </div>
-            )}
+                {suggestions.length === 0 && <p className="mt-2 text-sm text-muted">Belum ada rekomendasi dengan bukti pada siklus ini.</p>}
+                <ul className="mt-1 divide-y divide-line">
+                  {suggestions.slice(0, 3).map((item) => (
+                    <li key={item.id}>
+                      <button className="flex w-full items-start gap-2 py-2 text-left" onClick={() => setPicked(item)}>
+                        <span className={`mt-0.5 shrink-0 rounded-md border px-1.5 py-0.5 text-xs ${priorityOf(item.urgency).className}`}>{priorityOf(item.urgency).label}</span>
+                        <span className="min-w-0">
+                          <span className="line-clamp-2 block text-sm">{item.title}</span>
+                          <span className="text-xs text-muted">{item.unit}</span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            </div>
           </div>
+          {panel && (
+            <Overlay title={panelTitle(panel)} onClose={() => setPanel(null)}>
+              {panel === 'komposisi' && (
+                <div>
+                  <Donut positif={data.kpis.sentiment_pct.positif} netral={data.kpis.sentiment_pct.netral} negatif={data.kpis.sentiment_pct.negatif} />
+                  <ShareBar label="Periode ini" positif={data.kpis.sentiment_pct.positif} netral={data.kpis.sentiment_pct.netral} negatif={data.kpis.sentiment_pct.negatif} />
+                  <ShareBar label="Periode lalu" positif={data.kpis.sentiment_pct.previous.positif} netral={data.kpis.sentiment_pct.previous.netral} negatif={data.kpis.sentiment_pct.previous.negatif} />
+                  <p className="mt-2 text-sm text-muted">Pembanding KPw daerah lain dan BI nasional: [data perlu dilengkapi].</p>
+                </div>
+              )}
+              {panel === 'volume' && <CategoryShift rows={data.category_shift} />}
+              {panel === 'alert' && (
+                <ul className="divide-y divide-line text-sm">
+                  {alerts.length === 0 && <li className="py-2 text-muted">Tidak ada alert aktif.</li>}
+                  {alerts.map((item) => (
+                    <li key={item.id} className="py-2">
+                      <p className="font-medium">{item.title}</p>
+                      <p className="text-muted">{item.message}</p>
+                      <button className="mt-1 underline" onClick={() => navigate('/alert')}>Buka alert</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {panel === 'wilayah' && <AreaBars areas={data.areas} />}
+              {panel === 'contoh' && (
+                <div className="grid gap-3">
+                  <StoryPanel title="Nada positif" note={data.top_upside.window_label} items={data.top_upside.items.slice(0, 3)} />
+                  <StoryPanel title="Nada negatif" note={data.top_downside.window_label} items={data.top_downside.items.slice(0, 3)} />
+                </div>
+              )}
+            </Overlay>
+          )}
+          {issue && (
+            <Overlay title={issue.title} onClose={() => setIssue(null)}>
+              <p className="flex flex-wrap items-center gap-2 text-sm"><StanceBadge stance={issue.stance} /><span>{issue.mention_count} sumber</span><span>{issue.category}</span></p>
+              <p className="mt-2 text-sm">Risiko <RiskBar score={issue.risk_score} />. Skor ini menggabungkan nada, kecepatan sebar, dan kredibilitas sumber. Bukan keputusan.</p>
+              <div className="mt-3 flex gap-2">
+                <button className="h-10 rounded-md bg-navy-900 px-3 text-sm text-white" onClick={() => navigate(`/isu/${issue.id}`)}>Buka isu</button>
+                <button className="h-10 rounded-md border border-line px-3 text-sm" onClick={() => { setIssue(null); setPanel('contoh') }}>Contoh pemberitaan</button>
+              </div>
+            </Overlay>
+          )}
+          {picked && <RecommendationDrawer item={picked} disclaimer={advice.data?.disclaimer || ''} onClose={() => setPicked(null)} onChanged={advice.reload} />}
         </>
       )}
     </div>
   )
 }
 
-function Metric({ label, value, help, delta, suffix = '%' }: { label: string; value: string; help?: string; delta?: number | null; suffix?: string }) {
+function panelTitle(panel: 'komposisi' | 'volume' | 'alert' | 'wilayah' | 'contoh') {
+  if (panel === 'komposisi') return 'Komposisi sentimen'
+  if (panel === 'volume') return 'Perubahan volume per topik'
+  if (panel === 'alert') return 'Alert aktif'
+  if (panel === 'wilayah') return 'Wilayah Jakarta'
+  return 'Contoh pemberitaan'
+}
+
+function Overlay({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
   return (
-    <div className="border border-line bg-card px-3 py-2">
-      <p className="text-xs text-muted">{label}{help && <Help text={help} />}</p>
+    <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="mt-10 max-h-[80vh] w-full max-w-lg overflow-auto border border-line bg-card p-4 duration-200" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label={title}>
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <h2 className="text-base font-medium">{title}</h2>
+          <button className="h-9 rounded-md border border-line px-3 text-sm" onClick={onClose}>Tutup</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function Metric({ label, value, help, delta, suffix = '%', onClick }: { label: string; value: string; help?: string; delta?: number | null; suffix?: string; onClick?: () => void }) {
+  return (
+    <button className="border border-line bg-card px-3 py-2 text-left" onClick={onClick} title={help}>
+      <p className="text-xs text-muted">{label}</p>
       <p className="text-xl font-medium tabular-nums">{value}</p>
       <p className="flex items-center gap-1 text-xs text-muted">
-        {delta == null ? 'Tidak ada pembanding' : <><Direction delta={delta} />{formatSigned(delta, suffix)} vs periode lalu</>}
+        {delta == null ? 'Klik untuk rincian' : <><Direction delta={delta} />{formatSigned(delta, suffix)} vs periode lalu</>}
       </p>
-    </div>
+    </button>
   )
 }
 

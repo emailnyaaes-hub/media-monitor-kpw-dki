@@ -51,7 +51,12 @@ export interface AdviceItem {
   timeline?: { id: number; status: string; note: string; created_at: string; source_count: number }[]
 }
 
-const URGENCY: Record<string, string> = { rendah: 'Rendah', sedang: 'Sedang', tinggi: 'Tinggi', segera: 'Segera' }
+export function priorityOf(urgency: string): { label: string; className: string } {
+  if (urgency === 'segera' || urgency === 'tinggi') return { label: 'Segera', className: 'border-red-300 bg-red-50 text-red-900' }
+  if (urgency === 'sedang') return { label: 'Minggu ini', className: 'border-amber-300 bg-amber-50 text-amber-950' }
+  return { label: 'Pantau', className: 'border-emerald-300 bg-emerald-50 text-emerald-950' }
+}
+
 const STATUS: Record<string, string> = {
   baru: 'Baru',
   diterima: 'Diterima',
@@ -66,7 +71,7 @@ const CONFIDENCE: Record<string, string> = { rendah: 'Rendah', sedang: 'Sedang',
 
 export function AdviceCard({ item, onChanged }: { item: AdviceItem; onChanged?: () => void }) {
   const { user } = useAuth()
-  const canEdit = user?.role === 'admin' || user?.role === 'analis'
+  const canEdit = user?.role === 'admin' || user?.role === 'analis' || user?.role === 'pimpinan'
   const [draft, setDraft] = useState(item.draft_points)
   const [note, setNote] = useState(item.analyst_note)
   const [reason, setReason] = useState('')
@@ -89,10 +94,10 @@ export function AdviceCard({ item, onChanged }: { item: AdviceItem; onChanged?: 
 
   return (
     <article className="rounded-md border border-line bg-card p-4">
-      <p className="text-sm text-muted">Dihasilkan AI</p>
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className="rounded-full bg-navy-900 px-2 py-0.5 text-white">{item.kind_label}</span>
-        <span className="rounded-full border border-line px-2 py-0.5">Urgensi {URGENCY[item.urgency] || item.urgency}</span>
+      <p className="text-sm text-muted">Rekomendasi tindak lanjut · Disusun otomatis</p>
+      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+        <span className="rounded-md bg-navy-900 px-2 py-0.5 text-white">{item.kind_label}</span>
+        <span className={`rounded-md border px-2 py-0.5 ${priorityOf(item.urgency).className}`}>{priorityOf(item.urgency).label}</span>
         <span className="rounded-full border border-line px-2 py-0.5">{STATUS[item.status] || item.status}</span>
         <span className="text-muted">Keyakinan {CONFIDENCE[item.confidence] || item.confidence}</span>
       </div>
@@ -103,7 +108,7 @@ export function AdviceCard({ item, onChanged }: { item: AdviceItem; onChanged?: 
       <p className="mt-2 text-sm"><span className="font-medium">Rekomendasi. </span>{item.recommendation}</p>
       {item.channel && <p className="text-sm text-muted">Kanal: {item.channel}</p>}
       <p className="mt-2 text-sm"><span className="font-medium">Alasan. </span>{item.reason}</p>
-      <p className="mt-2 text-sm"><span className="font-medium">Jika ditindaklanjuti. </span>{item.impact_follow}</p>
+      <p className="mt-2 text-sm"><span className="font-medium">Indikator keberhasilan. </span>{item.impact_follow}</p>
       <p className="text-sm"><span className="font-medium">Jika diabaikan. </span>{item.impact_ignore}</p>
       <div className="mt-2 text-sm">
         <p className="font-medium">Opsi lain</p>
@@ -153,10 +158,9 @@ export function AdviceCard({ item, onChanged }: { item: AdviceItem; onChanged?: 
       )}
       {canEdit && (
         <div className="mt-3 flex flex-wrap gap-2">
-          <button className="h-11 rounded-md bg-navy-900 px-3 text-sm text-white" onClick={() => send('terima')}>Terima</button>
-          <button className="h-11 rounded-md border border-line px-3 text-sm" onClick={() => send('tolak')}>Tolak</button>
-          <button className="h-11 rounded-md border border-line px-3 text-sm" onClick={() => send('tunda')}>Tunda</button>
+          <button className="h-11 rounded-md bg-navy-900 px-3 text-sm text-white" onClick={() => send('setujui')}>Setujui</button>
           <button className="h-11 rounded-md border border-line px-3 text-sm" onClick={() => setEditing((value) => !value)}>Edit</button>
+          <button className="h-11 rounded-md border border-line px-3 text-sm" onClick={() => send('abaikan')}>Abaikan</button>
           <button className="h-9 rounded-lg border border-line px-3 text-sm" onClick={() => send('umpan', { useful: true })}>Saran berguna</button>
           <button className="h-9 rounded-lg border border-line px-3 text-sm" onClick={() => send('umpan', { useful: false })}>Tidak berguna</button>
         </div>

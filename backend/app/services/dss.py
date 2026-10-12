@@ -197,7 +197,14 @@ def act(db: Session, advice_id: int, body: dict, actor: str) -> dict:
     if row is None:
         return {}
     action = (body.get("action") or "").strip()
-    mapping = {"terima": "diterima", "tolak": "ditolak", "tunda": "ditunda", "selesai": "selesai"}
+    mapping = {
+        "terima": "diterima",
+        "setujui": "diterima",
+        "tolak": "ditolak",
+        "abaikan": "ditolak",
+        "tunda": "ditunda",
+        "selesai": "selesai",
+    }
     if action in mapping:
         row.status = mapping[action]
         row.analyst_note = body.get("analyst_note") or row.analyst_note

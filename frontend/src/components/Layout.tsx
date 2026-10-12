@@ -14,7 +14,7 @@ const NAV = [
   { to: '/', label: 'Ringkasan' },
   { to: '/isu', label: 'Isu & Tren' },
   { to: '/pantauan', label: 'Pantauan Kata' },
-  { to: '/saran', label: 'Pusat Saran' },
+  { to: '/saran', label: 'Rekomendasi' },
   { to: '/explorer', label: 'Jelajah Berita' },
   { to: '/laporan', label: 'Laporan' },
 ]

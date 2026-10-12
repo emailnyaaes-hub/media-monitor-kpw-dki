@@ -66,8 +66,8 @@ export default function AdvicePage() {
   return (
     <div>
       <PageHeader
-        title="Pusat Saran"
-        description="Pendukung keputusan untuk kehumasan. Tidak ada pernyataan yang dikirim otomatis."
+        title="Rekomendasi tindak lanjut"
+        description="Disusun otomatis dari berita yang tersimpan. Keputusan tetap di pimpinan. Tidak ada pesan yang dikirim sendiri."
       />
       <p className="mb-3 rounded-lg border border-line bg-gold-100 px-3 py-2 text-sm text-navy-900">{data.data?.disclaimer}</p>
       <p className="mb-4 text-sm text-muted">Saran diperbarui: {data.data?.refreshed_at ? `${formatWhen(data.data.refreshed_at)} WIB` : 'belum ada siklus'}</p>

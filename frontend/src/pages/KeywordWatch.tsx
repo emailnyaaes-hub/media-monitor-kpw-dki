@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { api, downloadFile, useApi } from '../api'
+import BackToGeneral from '../components/BackToGeneral'
 import { Donut, KeywordBars, KeywordLines } from '../components/Charts'
 import MentionDrawer from '../components/MentionDrawer'
 import { Empty, ErrorNote, SentimentBadge, SourceLink } from '../components/Ui'
@@ -114,9 +115,7 @@ export default function KeywordWatchPage() {
 
   function openDay(date?: string) {
     if (!date || grain !== 'day') return
-    const day = String(date).slice(0, 10)
-    filters.setDateFrom(day)
-    filters.setDateTo(day)
+    filters.focusDay(String(date).slice(0, 10), '/pantauan')
   }
 
   async function addTerm(event: FormEvent) {
@@ -247,6 +246,7 @@ export default function KeywordWatchPage() {
                   ))}
                 </div>
               </div>
+              <BackToGeneral />
               {linePoints.length === 0 ? <Empty label="Tidak ada berita pada rentang ini." /> : <KeywordLines className="h-44 min-h-0 flex-1 lg:h-auto" data={linePoints} series={[{ term: 'Jumlah', color: NAVY }]} onPick={(_term, date) => openDay(date)} />}
             </section>
             <section className="flex min-h-[11rem] flex-col border border-line bg-card p-3 lg:col-span-2">
