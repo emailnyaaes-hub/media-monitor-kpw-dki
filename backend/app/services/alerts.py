@@ -7,11 +7,41 @@ sungguhan masuk tahap berikutnya agar MVP tidak mengirim pesan ke luar.
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
 from app.models import Alert, AlertRule, Mention
+from app.nlp.voice import complaint_count, fastest_narrative, hoax_hits, voices_of
 from app.services.clock import now_wib
+
+
+def ensure_ews_rules(db: Session) -> None:
+    names = {row.name for row in db.query(AlertRule).all()}
+    specs = (
+        ("Pola bahasa hoaks mulai terbaca", "hoax_spread", 2, 24, "waspada"),
+        ("Narasi baru tumbuh cepat", "narrative_growth", 3, 48, "info"),
+        ("Keluhan bertambah dibanding jendela lalu", "complaint_growth", 50, 24, "waspada"),
+    )
+    added = False
+    for name, rule_type, threshold, window, severity in specs:
+        if name in names:
+            continue
+        db.add(
+            AlertRule(
+                name=name,
+                rule_type=rule_type,
+                threshold=threshold,
+                window_hours=window,
+                severity=severity,
+                keyword="",
+                channel="dashboard",
+                is_active=True,
+            )
+        )
+        added = True
+    if added:
+        db.commit()
 
 
 def evaluate_rules(db: Session) -> int:
@@ -45,7 +75,7 @@ def evaluate_rules(db: Session) -> int:
     return created
 
 
-def _check(db: Session, rule: AlertRule, now) -> tuple[str, str, int | None]:
+def _check(db: Session, rule: AlertRule, now) -> tuple[str, str, Optional[int]]:
     window_start = now - timedelta(hours=rule.window_hours)
     from app.services.blocklist import is_blocked, load_rules
 
@@ -110,4 +140,55 @@ def _check(db: Session, rule: AlertRule, now) -> tuple[str, str, int | None]:
                 f"Ada {len(rows)} mention dalam {rule.window_hours} jam. Tinjau apakah ada isu tunggal di baliknya.",
                 None,
             )
+    elif rule.rule_type == "hoax_spread":
+        hits = hoax_hits(rows)
+        if len(hits) >= rule.threshold:
+            return (
+                f"Pola bahasa hoaks terbaca pada {len(hits)} konten",
+                "Ini deteksi kata pada judul dan cuplikan, bukan penetapan bahwa konten itu hoaks. "
+                + _proof(hits),
+                hits[0].issue_id,
+            )
+    elif rule.rule_type == "narrative_growth":
+        prev_start = window_start - timedelta(hours=rule.window_hours)
+        prev_rows = _visible(db, prev_start, window_start, rules)
+        label, hits = fastest_narrative(rows, prev_rows)
+        if label and len(hits) >= rule.threshold:
+            return (
+                f"Narasi tumbuh: {label}",
+                f"{len(hits)} konten memuat pola narasi ini pada {rule.window_hours} jam terakhir. "
+                + _proof(hits),
+                hits[0].issue_id,
+            )
+    elif rule.rule_type == "complaint_growth":
+        prev_start = window_start - timedelta(hours=rule.window_hours)
+        prev_rows = _visible(db, prev_start, window_start, rules)
+        now_n = complaint_count(rows)
+        prev_n = complaint_count(prev_rows)
+        growth = 100.0 if prev_n == 0 and now_n else ((now_n - prev_n) / prev_n * 100 if prev_n else 0)
+        if growth >= rule.threshold and now_n > 0:
+            keluhan = [row for row in rows if "keluhan" in voices_of(row)]
+            return (
+                f"Keluhan naik {growth:.0f}%",
+                f"Dari {prev_n} menjadi {now_n} konten berkeluhan pada jendela {rule.window_hours} jam. Ambang {rule.threshold:.0f}%. "
+                + _proof(keluhan),
+                keluhan[0].issue_id if keluhan else None,
+            )
     return "", "", None
+
+
+def _visible(db: Session, start, end, rules) -> list[Mention]:
+    from app.services.blocklist import is_blocked
+
+    return [
+        row
+        for row in db.query(Mention).filter(Mention.published_at >= start, Mention.published_at < end).all()
+        if not is_blocked(row.url, row.author_handle, row.author_name, row.source_name, row.title, rules)
+    ]
+
+
+def _proof(rows: list[Mention]) -> str:
+    parts = [f"{row.title} — {row.url}" for row in rows[:3] if row.url]
+    if not parts:
+        return "Belum ada tautan bukti."
+    return "Bukti: " + " | ".join(parts)

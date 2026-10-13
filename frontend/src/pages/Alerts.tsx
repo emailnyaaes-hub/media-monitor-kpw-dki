@@ -24,6 +24,9 @@ const TYPES = [
   ['tier1_downside', 'Jumlah downside media tier-1'],
   ['kpw_negative', 'Jumlah mention negatif KPw'],
   ['volume_spike', 'Volume mention pada jendela'],
+  ['hoax_spread', 'Pola bahasa hoaks'],
+  ['narrative_growth', 'Narasi yang tumbuh'],
+  ['complaint_growth', 'Kenaikan keluhan (%)'],
 ]
 
 export default function AlertsPage() {

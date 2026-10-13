@@ -28,13 +28,11 @@ Untuk dibuka orang lain, bangun image dari `Dockerfile` lalu jalankan di layanan
 
 Atau dari akar proyek: `bash scripts/dev.sh`.
 
-## Akun demo
+## Akun
 
 | Pengguna | Sandi | Peran |
 | --- | --- | --- |
-| analis | analis123 | koreksi label dan status |
-| pimpinan | pimpinan123 | hanya melihat |
-| admin | admin123 | kata kunci, bobot, aturan, pengambilan data |
+| admin | admin123 | akses penuh: koreksi label, kata kunci, bobot, aturan, pengambilan data |
 
 Sandi ini hanya untuk latihan di komputer sendiri. Jangan membukanya ke jaringan kantor sebelum diganti.
 

@@ -81,6 +81,9 @@ def mention_detail(row: Mention) -> dict:
             "link_note": "Buka sumber asli",
         }
     )
+    from app.nlp.voice import describe_mention
+
+    data["voice"] = describe_mention(row)
     return data
 
 

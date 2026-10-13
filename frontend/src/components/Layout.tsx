@@ -7,13 +7,15 @@ import { useFilters } from '../filters'
 import { formatDay, formatWhen, PLATFORM_LABEL } from '../format'
 import { useTheme } from '../theme'
 import type { AlertItem } from '../types'
-import { Logo } from './Logo'
+import { BiLogo, Copyright, Logo, UNIT } from './Logo'
 import { inputClass } from './Ui'
 
 const NAV = [
   { to: '/', label: 'Ringkasan' },
   { to: '/isu', label: 'Isu & Tren' },
-  { to: '/pantauan', label: 'Pantauan Kata' },
+  { to: '/suara', label: 'Suara Publik' },
+  { to: '/solusi', label: 'Keluhan ke Solusi' },
+  { to: '/alat', label: 'Peta Tools' },
   { to: '/saran', label: 'Rekomendasi' },
   { to: '/explorer', label: 'Jelajah Berita' },
   { to: '/laporan', label: 'Laporan' },
@@ -91,9 +93,17 @@ export default function Layout() {
     `flex min-h-11 items-center border-l-2 px-3 text-base ${isActive ? 'border-gold-500 bg-white/10 text-gold-300' : 'border-transparent text-slate-200 hover:bg-white/5'}`
 
   const sidebar = (
-    <div className="flex h-full flex-col bg-navy-900 text-slate-100">
+    <div className="relative isolate flex h-full flex-col bg-navy-900 text-slate-100">
+      <div className="pointer-events-none absolute inset-0 -z-10" aria-hidden>
+        <img src="/img/newsroom.jpg" alt="" className="h-full w-full object-cover" />
+        <div className="absolute inset-0 bg-navy-900/90" />
+      </div>
       <div className="border-b border-white/10 px-4 py-4">
-        <Logo light />
+        <BiLogo className="h-6 w-auto" />
+        <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-sky-300">{UNIT}</p>
+        <div className="mt-2">
+          <Logo light />
+        </div>
       </div>
       <nav className="flex-1 overflow-y-auto py-2" aria-label="Utama">
         {NAV.map((item) => (
@@ -116,7 +126,11 @@ export default function Layout() {
   )
 
   return (
-    <div className="min-h-screen bg-canvas text-ink">
+    <div className="relative isolate min-h-screen text-ink">
+      <div className="no-print pointer-events-none fixed inset-0 -z-10" aria-hidden>
+        <img src="/img/jakarta.jpg" alt="" className="h-full w-full object-cover" />
+        <div className="absolute inset-0" style={{ background: 'var(--canvas)', opacity: 0.88 }} />
+      </div>
       <aside className="no-briefing fixed inset-y-0 left-0 z-30 hidden w-60 md:block">{sidebar}</aside>
       {open && (
         <div className="no-briefing fixed inset-0 z-40 md:hidden">
@@ -130,6 +144,10 @@ export default function Layout() {
             <button className="no-briefing grid h-11 w-11 place-items-center rounded-md border border-line md:hidden" onClick={() => setOpen(true)} aria-label="Buka menu">
               {open ? <X size={18} /> : <Menu size={18} />}
             </button>
+            <span className="no-briefing flex h-11 items-center md:hidden">
+              <BiLogo variant="blue" className="h-6 w-auto dark:hidden" />
+              <BiLogo className="hidden h-6 w-auto dark:block" />
+            </span>
             <form className="no-briefing flex min-w-48 flex-1 items-end gap-2" onSubmit={search}>
               <label className="grid min-w-40 flex-1 gap-1 text-sm text-muted">
                 Cari judul atau isu
@@ -217,8 +235,9 @@ export default function Layout() {
         <main className="px-4 py-5 md:px-6">
           <Outlet />
         </main>
-        <footer className="px-4 pb-8 text-sm leading-relaxed text-muted md:px-6">
-          Angka sentimen, skor risiko, dan saran bersifat pendukung. Putuskan setelah membaca sumber asli.
+        <footer className="border-t border-line px-4 py-4 text-sm leading-relaxed text-muted md:px-6">
+          <p>Angka sentimen, skor risiko, dan saran bersifat pendukung. Putuskan setelah membaca sumber asli.</p>
+          <Copyright className="mt-1 text-xs" />
         </footer>
       </div>
       {tourStep !== null && (

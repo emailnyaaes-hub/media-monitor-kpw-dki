@@ -58,6 +58,8 @@ class MentionPatch(BaseModel):
     status: Optional[str] = None
     pic: Optional[str] = Field(default=None, max_length=80)
     analyst_note: Optional[str] = Field(default=None, max_length=2000)
+    voice_tags: Optional[list[str]] = None
+    segment: Optional[str] = None
 
 
 class IssuePatch(BaseModel):
@@ -214,6 +216,30 @@ def get_trend(
     return {"items": analytics.trend(db, _window(date_from, date_to, platform, category, location), granularity)}
 
 
+@router.post("/insight/{chart}")
+def post_chart_insight(
+    chart: str,
+    granularity: str = "day",
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    platform: Optional[str] = None,
+    category: Optional[str] = None,
+    location: Optional[str] = None,
+    topic: str = "",
+    segment: str = "",
+    area: str = "",
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(get_current_user),
+):
+    from app.services.chart_insight import CHARTS, generate
+
+    if chart not in CHARTS:
+        raise HTTPException(status_code=404, detail="Grafik tidak dikenal")
+    if granularity not in {"day", "week", "month"}:
+        raise HTTPException(status_code=400, detail="Granularitas harus day, week, atau month")
+    return generate(db, _window(date_from, date_to, platform, category, location), chart, granularity, topic, segment, area)
+
+
 @router.get("/mentions")
 def get_mentions(
     date_from: Optional[date] = None,
@@ -307,12 +333,30 @@ def patch_mention(
         raise HTTPException(status_code=400, detail="Kategori tidak dikenali")
     if "status" in changes and changes["status"] not in STATUSES:
         raise HTTPException(status_code=400, detail="Status tidak dikenali")
-    old = {key: getattr(row, key) for key in changes}
+    from app.nlp.voice import SEGMENT_IDS, VOICES
+
+    voice_tags = changes.pop("voice_tags", None)
+    segment = changes.pop("segment", None)
+    old = {key: getattr(row, key) for key in changes if hasattr(row, key)}
+    if voice_tags is not None:
+        if any(item not in VOICES for item in voice_tags):
+            raise HTTPException(status_code=400, detail="Dimensi suara tidak dikenali")
+        old["voice_override"] = row.voice_override
+        row.voice_override = json.dumps(voice_tags, ensure_ascii=False)
+        changes["voice_override"] = row.voice_override
+    if segment is not None:
+        if segment not in SEGMENT_IDS:
+            raise HTTPException(status_code=400, detail="Segmen tidak dikenali")
+        old["segment_override"] = row.segment_override
+        row.segment_override = segment
+        changes["segment_override"] = segment
     for key, value in changes.items():
-        setattr(row, key, value)
+        if hasattr(row, key) and key not in {"voice_override", "segment_override"}:
+            setattr(row, key, value)
     label_fields = {"sentiment", "stance", "category"} & set(changes)
-    if label_fields:
+    if label_fields or {"voice_override", "segment_override"} & set(changes):
         row.human_corrected = True
+    if label_fields:
         row.confidence = 1
         note = changes.get("analyst_note") or "label diperbarui analis"
         row.rationale = f"[Koreksi analis] {note}"
@@ -345,6 +389,50 @@ def get_issues(
     return {"items": analytics.list_issues(db, _window(date_from, date_to, platform, category, location), kpw_only=kpw)}
 
 
+@router.get("/suara")
+def get_suara(
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    platform: Optional[str] = None,
+    category: Optional[str] = None,
+    location: Optional[str] = None,
+    topic: str = "",
+    segment: str = "",
+    area: str = "",
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(get_current_user),
+):
+    from app.nlp.voice import snapshot
+
+    window = _window(date_from, date_to, platform, category, location)
+    current = analytics.base_query(db, window).all()
+    previous = analytics.base_query(db, analytics.previous_window(window)).all()
+    return snapshot(current, previous, topic, segment, area)
+
+
+@router.get("/solusi")
+def get_solutions(
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    platform: Optional[str] = None,
+    category: Optional[str] = None,
+    location: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(get_current_user),
+):
+    from app.nlp.voice import solution_table
+
+    window = _window(date_from, date_to, platform, category, location)
+    return {"items": solution_table(analytics.base_query(db, window).all()), "disclaimer": DISCLAIMER}
+
+
+@router.get("/peta-tools")
+def get_tools_map(_: CurrentUser = Depends(get_current_user)):
+    from app.nlp.voice import tools_map
+
+    return tools_map()
+
+
 @router.get("/issues/{issue_id}")
 def get_issue(issue_id: int, db: Session = Depends(get_db), _: CurrentUser = Depends(get_current_user)):
     row = db.get(Issue, issue_id)
@@ -364,6 +452,9 @@ def get_issue(issue_id: int, db: Session = Depends(get_db), _: CurrentUser = Dep
         item["timeline"] = advice_timeline(db, item["id"])
     data["advices"] = advice_payload["items"]
     data["advice_disclaimer"] = advice_payload["disclaimer"]
+    from app.nlp.voice import build_brief
+
+    data["brief"] = build_brief(mentions)
     return data
 
 
@@ -484,26 +575,6 @@ def get_sources(
 ):
     window = _window(date_from, date_to, platform, category, location)
     return {"media": analytics.media_ranking(db, window), "influencers": analytics.influencers(db, window)}
-
-
-@router.get("/keyword-watch")
-def get_keyword_watch(
-    date_from: Optional[date] = None,
-    date_to: Optional[date] = None,
-    platform: Optional[str] = None,
-    category: Optional[str] = None,
-    location: Optional[str] = None,
-    terms: str = "",
-    grain: str = "day",
-    db: Session = Depends(get_db),
-    _: CurrentUser = Depends(get_current_user),
-):
-    if grain not in {"day", "week", "month"}:
-        raise HTTPException(status_code=400, detail="Granularitas harus day, week, atau month")
-    from app.services.keyword_watch import snapshot
-
-    selected = [part.strip() for part in terms.split(",") if part.strip()]
-    return snapshot(db, _window(date_from, date_to, platform, category, location), selected, grain)
 
 
 @router.get("/keywords")
@@ -715,7 +786,7 @@ def read_alert(alert_id: int, db: Session = Depends(get_db), _: CurrentUser = De
 def add_rule(body: RuleBody, db: Session = Depends(get_db), user: CurrentUser = Depends(require_admin)):
     if body.severity not in SEVERITIES:
         raise HTTPException(status_code=400, detail="Tingkat keparahan tidak dikenali")
-    if body.rule_type not in {"negative_growth", "keyword_count", "tier1_downside", "kpw_negative", "volume_spike"}:
+    if body.rule_type not in {"negative_growth", "keyword_count", "tier1_downside", "kpw_negative", "volume_spike", "hoax_spread", "narrative_growth", "complaint_growth"}:
         raise HTTPException(status_code=400, detail="Jenis aturan tidak dikenali")
     row = AlertRule(**body.model_dump())
     db.add(row)

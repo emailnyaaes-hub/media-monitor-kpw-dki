@@ -12,3 +12,5 @@ frontend/dist/
 DEPLOY_STATUS.txt
 backend/.env
 .env
+
+.tmp/

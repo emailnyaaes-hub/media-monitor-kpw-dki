@@ -7,13 +7,15 @@ import ExplorerPage from './pages/Explorer'
 import IssueDetailPage from './pages/IssueDetail'
 import IssuesPage from './pages/Issues'
 import KeywordsPage from './pages/Keywords'
-import KeywordWatchPage from './pages/KeywordWatch'
 import Login from './pages/Login'
 import OverviewPage from './pages/Overview'
 import ReportsPage from './pages/Reports'
 import SentimentPage from './pages/Sentiment'
 import SettingsPage from './pages/Settings'
+import SolusiPage from './pages/Solusi'
 import SourcesPage from './pages/Sources'
+import SuaraPage from './pages/Suara'
+import ToolsPage from './pages/Tools'
 
 function Guard() {
   const { user, loading } = useAuth()
@@ -31,7 +33,9 @@ export default function App() {
         <Route path="/saran" element={<AdvicePage />} />
         <Route path="/sentimen" element={<SentimentPage />} />
         <Route path="/isu" element={<IssuesPage />} />
-        <Route path="/pantauan" element={<KeywordWatchPage />} />
+        <Route path="/suara" element={<SuaraPage />} />
+        <Route path="/solusi" element={<SolusiPage />} />
+        <Route path="/alat" element={<ToolsPage />} />
         <Route path="/isu/:id" element={<IssueDetailPage />} />
         <Route path="/sumber" element={<SourcesPage />} />
         <Route path="/explorer" element={<ExplorerPage />} />

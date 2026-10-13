@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApi } from '../api'
+import ChartInsight from '../components/ChartInsight'
 import { Card, ErrorNote, Loading, PageHeader, StanceBadge } from '../components/Ui'
 import { useFilters } from '../filters'
 import type { IssueCard } from '../types'
@@ -49,6 +50,7 @@ export default function IssuesPage() {
                 Terkait <strong>{term}</strong>: {related.data?.items.map((item) => item.text).join(', ') || 'memuat...'}
               </p>
             )}
+            <ChartInsight chart="kata" className="mt-4" />
           </Card>
           <Card>
             <h2 className="font-medium">Tagar</h2>

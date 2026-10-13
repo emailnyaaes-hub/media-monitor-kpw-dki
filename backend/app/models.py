@@ -106,6 +106,8 @@ class Mention(Base):
     analyst_note: Mapped[str] = mapped_column(Text, default="")
     human_corrected: Mapped[bool] = mapped_column(Boolean, default=False)
     quotes_bi: Mapped[bool] = mapped_column(Boolean, default=False)
+    voice_override: Mapped[str] = mapped_column(Text, default="")
+    segment_override: Mapped[str] = mapped_column(Text, default="")
     issue_id: Mapped[Optional[int]] = mapped_column(ForeignKey("issues.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 

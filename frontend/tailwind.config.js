@@ -23,8 +23,7 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['"IBM Plex Sans"', 'Segoe UI', 'sans-serif'],
-        serif: ['"Source Serif 4"', 'Georgia', 'serif'],
+        sans: ['Mulish', 'Segoe UI', 'sans-serif'],
       },
       boxShadow: {
         card: 'none',

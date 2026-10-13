@@ -137,8 +137,8 @@ def _facts(overview: dict, issues: list[dict], advice: list[dict], trend: list[d
         "new_issues": sum(1 for item in issues if item.get("status") == "baru"),
         "source": _t(
             lang,
-            f"Sumber: mention pihak luar pada Media Monitor, {period}. Bukan data BPS, SPI, atau PIHPS. Filter: {theme}; {where}.",
-            f"Source: external mentions in Media Monitor, {period}. Not BPS, SPI, or PIHPS. Filter: {theme}; {where}.",
+            f"Sumber: mention pihak luar pada Danita, {period}. Bukan data BPS, SPI, atau PIHPS. Filter: {theme}; {where}.",
+            f"Source: external mentions in Danita, {period}. Not BPS, SPI, or PIHPS. Filter: {theme}; {where}.",
         ),
     }
 
@@ -388,7 +388,7 @@ def _pptx(deck: dict) -> bytes:
     presentation = Presentation()
     presentation.slide_width = Inches(13.333)
     presentation.slide_height = Inches(7.5)
-    presentation.core_properties.title = slides[0]["title"] if slides else "Media Monitor"
+    presentation.core_properties.title = slides[0]["title"] if slides else "Danita"
     presentation.core_properties.subject = "Untuk Internal"
     presentation.core_properties.category = "KPw BI DKI Jakarta"
     blank = presentation.slide_layouts[6]

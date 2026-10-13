@@ -33,13 +33,10 @@ async def lifespan(_: FastAPI):
 
         ensure_defaults(db)
         apply_blocklist(db)
-        from app.services.keyword_watch import ensure_watch_keywords
-        from app.services.pipeline import retag
-
-        if ensure_watch_keywords(db):
-            retag(db)
+        from app.services.alerts import ensure_ews_rules
         from app.services.dss import refresh_advices
 
+        ensure_ews_rules(db)
         refresh_advices(db)
     finally:
         db.close()
@@ -49,7 +46,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="Media Monitor KPw BI DKI Jakarta",
+    title="Danita · Dashboard Monitor Sentimen Berita",
     version="0.2.0",
     description="Pemantauan media dari RSS dan API resmi. Sumber yang gagal tidak diisi data karangan.",
     lifespan=lifespan,

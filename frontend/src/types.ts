@@ -63,6 +63,17 @@ export interface MentionDetail extends MentionCard {
   analyst_note: string
   human_corrected: boolean
   link_note: string
+  voice?: {
+    voices: string[]
+    voice_labels: string[]
+    voice_corrected: boolean
+    segment: string
+    segment_corrected: boolean
+    topic: string
+    area: string
+    narrative: string
+    method: string
+  }
   audit: { actor: string; action: string; old_value: string; new_value: string; created_at: string }[]
 }
 

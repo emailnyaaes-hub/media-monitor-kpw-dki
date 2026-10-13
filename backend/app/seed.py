@@ -70,6 +70,9 @@ def seed_if_empty(db: Session) -> None:
 
 
 def seed(db: Session) -> None:
+    allowed = [username for username, *_ in USERS]
+    if db.query(User).filter(User.username.notin_(allowed)).delete(synchronize_session=False):
+        db.commit()
     if db.query(User).count() == 0:
         _users(db)
     if db.query(Keyword).count() == 0:

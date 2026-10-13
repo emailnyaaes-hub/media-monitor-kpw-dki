@@ -4,6 +4,7 @@ import { api } from '../api'
 import { useAuth } from '../auth'
 import { formatReach, formatWhen, PLATFORM_LABEL, STATUS_LABEL } from '../format'
 import type { MentionDetail } from '../types'
+import { SEGMENTS, VOICE_OPTIONS } from '../voice'
 import { ErrorNote, HumanNote, QuoteBadge, SentimentBadge, SourceLink, StanceBadge, StatusBadge, VerifiedNote, inputClass } from './Ui'
 
 const STATUSES = ['baru', 'ditinjau', 'dieskalasi', 'ditangani', 'selesai']
@@ -19,6 +20,9 @@ export default function MentionDrawer({ id, onClose, onSaved }: { id: number; on
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ sentiment: '', stance: '', category: '', status: '', pic: '', analyst_note: '' })
+  const [voices, setVoices] = useState<string[]>([])
+  const [segment, setSegment] = useState('')
+  const [voiceTouched, setVoiceTouched] = useState(false)
 
   useEffect(() => {
     let cancel = false
@@ -34,6 +38,9 @@ export default function MentionDrawer({ id, onClose, onSaved }: { id: number; on
           pic: data.pic,
           analyst_note: data.analyst_note,
         })
+        setVoices(data.voice?.voices || [])
+        setSegment(data.voice?.segment || '')
+        setVoiceTouched(false)
       })
       .catch((err: Error) => { if (!cancel) setError(err.message) })
     return () => { cancel = true }
@@ -43,7 +50,8 @@ export default function MentionDrawer({ id, onClose, onSaved }: { id: number; on
     setSaving(true)
     setError('')
     try {
-      const next = await api<MentionDetail>(`/api/mentions/${id}`, { method: 'PATCH', body: JSON.stringify(form) })
+      const body = voiceTouched ? { ...form, voice_tags: voices, segment } : form
+      const next = await api<MentionDetail>(`/api/mentions/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
       setItem(next)
       onSaved()
     } catch (err) {
@@ -119,6 +127,36 @@ export default function MentionDrawer({ id, onClose, onSaved }: { id: number; on
                   {CATEGORIES.map((itemName) => <option key={itemName}>{itemName}</option>)}
                 </select>
               </div>
+              {item.voice && (
+                <fieldset className="grid gap-2 rounded-md border border-line p-3">
+                  <legend className="px-1 text-sm font-medium">Suara Publik</legend>
+                  <p className="text-xs text-muted">
+                    Topik {item.voice.topic} · {item.voice.area}
+                    {item.voice.narrative ? ` · narasi ${item.voice.narrative}` : ''}
+                    {item.voice.voice_corrected || item.voice.segment_corrected ? ' · sudah dikoreksi analis' : ''}
+                  </p>
+                  <div className="flex flex-wrap gap-3 text-sm">
+                    {VOICE_OPTIONS.map(([value, label]) => (
+                      <label key={value} className="inline-flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          disabled={!canEdit}
+                          checked={voices.includes(value)}
+                          onChange={(event) => {
+                            setVoiceTouched(true)
+                            setVoices(event.target.checked ? [...voices, value] : voices.filter((entry) => entry !== value))
+                          }}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                  <select className={inputClass} disabled={!canEdit} value={segment} aria-label="Segmen audiens" onChange={(event) => { setVoiceTouched(true); setSegment(event.target.value) }}>
+                    {SEGMENTS.map((name) => <option key={name}>{name}</option>)}
+                  </select>
+                  <p className="text-xs text-muted">{item.voice.method}</p>
+                </fieldset>
+              )}
               <input className={inputClass} disabled={!canEdit} placeholder="PIC" value={form.pic} onChange={(event) => setForm({ ...form, pic: event.target.value })} />
               <textarea className="min-h-20 rounded-lg border border-line bg-card p-2 text-sm" disabled={!canEdit} placeholder="Catatan analis" value={form.analyst_note} onChange={(event) => setForm({ ...form, analyst_note: event.target.value })} />
               {canEdit ? (

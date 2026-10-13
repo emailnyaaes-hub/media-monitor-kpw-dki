@@ -22,6 +22,9 @@ DEFAULTS = [
     ("account", "kpw_bi*", "Akun kantor perwakilan BI"),
     ("account", "kpwbidki*", "Akun KPw BI DKI Jakarta"),
     ("account", "bikaltim", "Halaman resmi BI Kalimantan Timur"),
+    ("account", "bankindonesia*", "Akun resmi BI pusat dan provinsi, misalnya BankIndonesiaRiau"),
+    ("account", "bi_provinsi*", "Akun X resmi kantor perwakilan BI provinsi, misalnya BI_ProvinsiBali"),
+    ("domain", "perpustakaan-bi.org", "Situs Perpustakaan Bank Indonesia"),
     ("channel", "Bank Indonesia", "Nama tampilan akun resmi pusat"),
     ("channel", "Bank Indonesia Channel", "Nama kanal YouTube resmi"),
     ("channel", "Bank Indonesia Institute", "Kanal lembaga internal BI"),
@@ -48,11 +51,22 @@ class BlockRule:
     is_active: bool = True
 
 
+ADDED_IN_V2 = {"bankindonesia*", "bi_provinsi*", "perpustakaan-bi.org"}
+
+
 def ensure_defaults(db: Session) -> None:
-    if db.query(BlockedSource).count():
-        return
-    for kind, value, note in DEFAULTS:
-        db.add(BlockedSource(kind=kind, value=value, note=note, is_active=True))
+    """Aturan baru ditambahkan sekali saja, agar aturan yang dihapus admin tidak muncul lagi."""
+    from app.models import AppMeta
+
+    if not db.query(BlockedSource).count():
+        for kind, value, note in DEFAULTS:
+            db.add(BlockedSource(kind=kind, value=value, note=note, is_active=True))
+    elif db.get(AppMeta, "blocklist_defaults_v2") is None:
+        existing = {row.value.casefold() for row in db.query(BlockedSource).all()}
+        for kind, value, note in DEFAULTS:
+            if value in ADDED_IN_V2 and value not in existing:
+                db.add(BlockedSource(kind=kind, value=value, note=note, is_active=True))
+    db.merge(AppMeta(key="blocklist_defaults_v2", value="1"))
     db.commit()
 
 

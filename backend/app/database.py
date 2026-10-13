@@ -40,6 +40,12 @@ def init_db() -> None:
     if "quotes_bi" not in columns:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE mentions ADD COLUMN quotes_bi BOOLEAN NOT NULL DEFAULT 0"))
+    columns = {column["name"] for column in inspect(engine).get_columns("mentions")}
+    with engine.begin() as connection:
+        if "voice_override" not in columns:
+            connection.execute(text("ALTER TABLE mentions ADD COLUMN voice_override TEXT NOT NULL DEFAULT ''"))
+        if "segment_override" not in columns:
+            connection.execute(text("ALTER TABLE mentions ADD COLUMN segment_override TEXT NOT NULL DEFAULT ''"))
 
 
 def get_db():

@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import html
 import io
-from datetime import datetime
+from datetime import date, datetime
 
 from openpyxl import Workbook
 from pptx import Presentation
@@ -59,7 +59,8 @@ def workbook(db: Session, window: dict) -> bytes:
     book = Workbook()
     sheet = book.active
     sheet.title = "Ringkasan"
-    sheet.append(["Media Monitor KPw BI DKI Jakarta"])
+    sheet.append(["Danita · Dashboard Monitor Sentimen Berita"])
+    sheet.append(["© Kantor Perwakilan Bank Indonesia Provinsi DKI Jakarta"])
     sheet.append(["Mode", "Sumber asli"])
     sheet.append(["Periode", report["overview"]["period"]["from"], report["overview"]["period"]["to"]])
     for paragraph in report["paragraphs"]:
@@ -165,7 +166,7 @@ def pptx_report(db: Session, window: dict) -> bytes:
     kpis = report["overview"]["kpis"]
     period = report["overview"]["period"]
     add_slide(
-        "Laporan Media Monitor",
+        "Laporan Danita",
         [
             f"KPw BI DKI Jakarta · {period['from']} s.d. {period['to']}",
             "Hanya konten pihak luar. Kanal resmi Bank Indonesia tidak dihitung. Angka wajib dibaca dari tautan sumber.",
@@ -219,7 +220,7 @@ def html_report(db: Session, window: dict) -> str:
 <html lang="id">
 <head>
   <meta charset="utf-8" />
-  <title>Laporan Media Monitor</title>
+  <title>Laporan Danita</title>
   <style>
     body {{ font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif; color: #0B1F3A; margin: 32px; }}
     h1 {{ font-size: 22px; margin-bottom: 4px; }}
@@ -234,8 +235,8 @@ def html_report(db: Session, window: dict) -> str:
 </head>
 <body>
   <button class="noprint" onclick="window.print()">Cetak atau simpan PDF</button>
-  <h1>Laporan Media Monitor</h1>
-  <div>KPw BI Provinsi DKI Jakarta · Sumber asli, cuplikan singkat</div>
+  <h1>Laporan Danita</h1>
+  <div>Dashboard Monitor Sentimen Berita · Sumber asli, cuplikan singkat</div>
   <div class="gold"></div>
   <div class="kpi">
     <div><strong>{kpis['total_mention']['value']}</strong><br>Mention</div>
@@ -251,5 +252,6 @@ def html_report(db: Session, window: dict) -> str:
   <h2>Sumber</h2>
   <ul>{source_html or "<li>Belum ada sumber pada rentang ini.</li>"}</ul>
   <p class="note">{report['disclaimer']}</p>
+  <p style="font-size:12px;color:#5C6570">© {date.today().year} Kantor Perwakilan Bank Indonesia Provinsi DKI Jakarta. Hak cipta dilindungi.</p>
 </body>
 </html>"""

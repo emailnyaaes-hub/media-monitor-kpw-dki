@@ -14,7 +14,7 @@ import type { Sentiment, Severity, Stance } from '../types'
 export function PageHeader({ title, description }: { title: string; description: string }) {
   return (
     <div className="mb-5">
-      <h1 className="font-serif text-2xl font-medium tracking-tight md:text-3xl">{title}</h1>
+      <h1 className="text-2xl font-bold tracking-tight text-navy-900 dark:text-white md:text-3xl">{title}</h1>
       <p className="mt-1 max-w-3xl text-base text-muted">{description}</p>
     </div>
   )

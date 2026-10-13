@@ -92,7 +92,7 @@ export default function DeckDialog({ onClose }: { onClose: () => void }) {
       <div className="mx-auto mt-6 w-full max-w-3xl rounded-md border border-line bg-card p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 id="deck-title" className="font-serif text-xl font-medium">Pratinjau briefing</h2>
+            <h2 id="deck-title" className="text-xl font-bold">Pratinjau briefing</h2>
             <p className="mt-1 text-sm text-muted">Judul dan kotak So what bisa disunting. Angka tetap dari data filter yang aktif.</p>
           </div>
           <button className="h-10 rounded-md border border-line px-3 text-sm" onClick={onClose}>Tutup</button>

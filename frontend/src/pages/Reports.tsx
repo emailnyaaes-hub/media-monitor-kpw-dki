@@ -15,25 +15,10 @@ export default function ReportsPage() {
   const filters = useFilters()
   const report = useApi<Report>(`/api/reports/summary?${filters.query}`)
 
-  function openPrint() {
-    const token = localStorage.getItem('bi-token')
-    fetch(`/api/export/laporan.html?${filters.query}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((response) => response.text())
-      .then((html) => {
-        const frame = window.open('', '_blank')
-        if (!frame) return
-        frame.document.write(html)
-        frame.document.close()
-      })
-  }
-
   return (
     <div>
-      <PageHeader title="Laporan" description="Ringkasan harian sampai bulanan mengikuti rentang tanggal di atas. PDF lewat cetak peramban, angka lengkap lewat Excel."       />
+      <PageHeader title="Laporan" description="Ringkasan harian sampai bulanan mengikuti rentang tanggal di atas." />
       <div className="mb-4 flex flex-wrap gap-2">
-        <button className="h-10 rounded-lg bg-navy-900 px-4 text-sm text-white" onClick={openPrint}>Pratinjau cetak / PDF</button>
-        <button className="h-10 rounded-lg border border-line px-4 text-sm" onClick={() => downloadFile(`/api/export/laporan.xlsx?${filters.query}`, 'laporan-media-monitor.xlsx')}>Unduh Excel</button>
-        <button className="h-10 rounded-lg border border-line px-4 text-sm" onClick={() => downloadFile(`/api/export/laporan.pptx?${filters.query}`, 'laporan-media-monitor.pptx')}>Unduh PPTX</button>
         <button className="h-10 rounded-lg border border-line px-4 text-sm" onClick={() => downloadFile(`/api/export/mentions.csv?${filters.query}`, 'mention.csv')}>Unduh CSV mention</button>
       </div>
       {report.loading && <Loading />}

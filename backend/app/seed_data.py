@@ -96,8 +96,6 @@ SAVED_QUERIES = [
 
 USERS = [
     ("admin", "Admin Sistem", "admin", "admin123"),
-    ("analis", "Analis Media", "analis", "analis123"),
-    ("pimpinan", "Pejabat Pimpinan", "pimpinan", "pimpinan123"),
 ]
 
 # day_start / day_end: berapa hari ke belakang konten isu ini tersebar.

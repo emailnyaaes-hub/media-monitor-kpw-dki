@@ -5,6 +5,7 @@ import type { AdviceItem } from '../components/AdviceCard'
 import { priorityOf } from '../components/AdviceCard'
 import { Donut, TrendChart } from '../components/Charts'
 import BackToGeneral from '../components/BackToGeneral'
+import ChartInsight from '../components/ChartInsight'
 import RecommendationDrawer from '../components/RecommendationDrawer'
 import { Card, Empty, ErrorNote, Loading, QuoteBadge, RiskBar, SourceLink, StanceBadge } from '../components/Ui'
 import { useFilters } from '../filters'
@@ -16,7 +17,7 @@ export default function OverviewPage() {
   const filters = useFilters()
   const navigate = useNavigate()
   const [grain, setGrain] = useState<'day' | 'week' | 'month'>('day')
-  const [panel, setPanel] = useState<null | 'komposisi' | 'volume' | 'alert' | 'wilayah' | 'contoh'>(null)
+  const [panel, setPanel] = useState<null | 'komposisi' | 'volume' | 'alert' | 'contoh'>(null)
   const [issue, setIssue] = useState<IssueCard | null>(null)
   const [picked, setPicked] = useState<AdviceItem | null>(null)
   const [tour, setTour] = useState(() => localStorage.getItem('bi-rek-tour') !== '1')
@@ -51,7 +52,7 @@ export default function OverviewPage() {
   const suggestions = advice.data?.items || []
 
   return (
-    <div className="flex flex-col gap-2 md:h-[calc(100dvh-12.5rem)] md:overflow-hidden">
+    <div className="flex flex-col gap-2 md:h-[calc(100dvh-12.5rem)] md:overflow-y-auto">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-base font-medium">Ringkasan</h1>
         {data && (
@@ -76,8 +77,8 @@ export default function OverviewPage() {
             <Metric label="Volume percakapan" value={formatNumber(data.kpis.total_mention.value)} delta={data.kpis.total_mention.delta_pct} help="Jumlah berita dan unggahan pihak luar pada rentang ini." onClick={() => setPanel('volume')} />
             <Metric label="Alert aktif" value={formatNumber(alerts.length)} onClick={() => setPanel('alert')} />
           </div>
-          <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-5">
-            <section className="flex min-h-0 flex-col border border-line bg-card p-3 lg:col-span-3">
+          <div className="grid flex-1 gap-2 lg:grid-cols-5">
+            <section className="flex flex-col border border-line bg-card p-3 lg:col-span-3">
               <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-sm font-medium">{trendTitle}</h2>
                 <div className="flex gap-1">
@@ -86,12 +87,12 @@ export default function OverviewPage() {
                       {item === 'day' ? 'Harian' : item === 'week' ? 'Mingguan' : 'Bulanan'}
                     </button>
                   ))}
-                  <button className="h-8 rounded-md border border-line px-2 text-xs" onClick={() => setPanel('wilayah')}>Wilayah</button>
                 </div>
               </div>
               <p className="mb-1 text-xs text-muted">Klik satu hari untuk menyaring berita pada tanggal itu. Segitiga menandai lonjakan.</p>
               <BackToGeneral />
-              {trend.length === 0 ? <Empty label="Belum ada percakapan pada rentang ini." /> : <TrendChart className="h-52 min-h-0 flex-1 lg:h-auto" data={trend} onPick={openDay} />}
+              {trend.length === 0 ? <Empty label="Belum ada percakapan pada rentang ini." /> : <TrendChart className="h-52 min-h-0 flex-1 lg:h-auto lg:min-h-[16rem]" data={trend} onPick={openDay} />}
+              <ChartInsight chart="trend" granularity={grain} className="mt-2 shrink-0" />
             </section>
             <div className="grid min-h-0 gap-2 lg:col-span-2">
               <section className="min-h-0 overflow-auto border border-line bg-card p-3">
@@ -138,9 +139,15 @@ export default function OverviewPage() {
                   <ShareBar label="Periode ini" positif={data.kpis.sentiment_pct.positif} netral={data.kpis.sentiment_pct.netral} negatif={data.kpis.sentiment_pct.negatif} />
                   <ShareBar label="Periode lalu" positif={data.kpis.sentiment_pct.previous.positif} netral={data.kpis.sentiment_pct.previous.netral} negatif={data.kpis.sentiment_pct.previous.negatif} />
                   <p className="mt-2 text-sm text-muted">Pembanding KPw daerah lain dan BI nasional: [data perlu dilengkapi].</p>
+                  <ChartInsight chart="komposisi" className="mt-3" />
                 </div>
               )}
-              {panel === 'volume' && <CategoryShift rows={data.category_shift} />}
+              {panel === 'volume' && (
+                <div>
+                  <CategoryShift rows={data.category_shift} />
+                  <ChartInsight chart="volume" className="mt-3" />
+                </div>
+              )}
               {panel === 'alert' && (
                 <ul className="divide-y divide-line text-sm">
                   {alerts.length === 0 && <li className="py-2 text-muted">Tidak ada alert aktif.</li>}
@@ -153,7 +160,6 @@ export default function OverviewPage() {
                   ))}
                 </ul>
               )}
-              {panel === 'wilayah' && <AreaBars areas={data.areas} />}
               {panel === 'contoh' && (
                 <div className="grid gap-3">
                   <StoryPanel title="Nada positif" note={data.top_upside.window_label} items={data.top_upside.items.slice(0, 3)} />
@@ -179,11 +185,10 @@ export default function OverviewPage() {
   )
 }
 
-function panelTitle(panel: 'komposisi' | 'volume' | 'alert' | 'wilayah' | 'contoh') {
+function panelTitle(panel: 'komposisi' | 'volume' | 'alert' | 'contoh') {
   if (panel === 'komposisi') return 'Komposisi sentimen'
   if (panel === 'volume') return 'Perubahan volume per topik'
   if (panel === 'alert') return 'Alert aktif'
-  if (panel === 'wilayah') return 'Wilayah Jakarta'
   return 'Contoh pemberitaan'
 }
 
@@ -269,27 +274,6 @@ function ShareBar({ label, positif, netral, negatif }: { label: string; positif:
       </div>
       <p className="mt-1 text-sm text-muted">positif {formatPct(positif)} · netral {formatPct(netral)} · negatif {formatPct(negatif)}</p>
     </div>
-  )
-}
-
-function AreaBars({ areas }: { areas: Overview['areas'] }) {
-  const max = Math.max(1, ...areas.map((item) => item.count))
-  return (
-    <section className="border border-line bg-card p-3">
-      <h2 className="text-sm font-medium">Sebaran mention wilayah administrasi</h2>
-      <p className="mt-1 text-sm text-muted">Jumlah mention yang menyebut nama wilayah. Bukan peta batas resmi.</p>
-      <ul className="mt-3 space-y-2">
-        {areas.map((area) => (
-          <li key={area.name} className="grid grid-cols-[9rem_1fr_2.5rem] items-center gap-2 text-sm">
-            <span className="truncate">{area.name}</span>
-            <span className="h-2 bg-line" aria-hidden>
-              <span className="block h-2 bg-navy-800" style={{ width: `${(area.count / max) * 100}%` }} />
-            </span>
-            <span className="text-right tabular-nums">{formatNumber(area.count)}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
   )
 }
 
