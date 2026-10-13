@@ -263,6 +263,11 @@ def trend(db: Session, window: dict, granularity: str) -> list[dict]:
     buckets: dict[str, Counter] = defaultdict(Counter)
     for row in rows:
         buckets[_bucket(row.published_at, granularity)][row.sentiment] += 1
+    if buckets:
+        day = window["date_from"]
+        while day <= window["date_to"]:
+            buckets[_bucket(datetime.combine(day, time.min), granularity)]
+            day += timedelta(days=1)
     points = []
     for key in sorted(buckets):
         counts = buckets[key]
