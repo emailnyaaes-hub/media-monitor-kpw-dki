@@ -8,10 +8,14 @@ Untuk produksi, ganti BI_DATABASE_URL menjadi URL PostgreSQL.
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
+
+SEED_DB = Path(__file__).resolve().parent.parent / "data" / "seed.db"
+
 
 def _data_dir() -> Path:
     # Vercel filesystem is read-only except /tmp.
@@ -26,7 +30,18 @@ def _data_dir() -> Path:
     return path
 
 
+def _ensure_seed(data_dir: Path) -> None:
+    """Salin seed.db ke lokasi kerja bila database masih kosong (mis. cold start Vercel)."""
+    target = data_dir / "monitor.db"
+    if not SEED_DB.is_file():
+        return
+    if target.is_file() and target.stat().st_size > 10_000:
+        return
+    shutil.copy2(SEED_DB, target)
+
+
 DATA_DIR = _data_dir()
+_ensure_seed(DATA_DIR)
 
 DEFAULT_URL = f"sqlite:///{DATA_DIR / 'monitor.db'}"
 DATABASE_URL = os.environ.get("BI_DATABASE_URL", DEFAULT_URL)
