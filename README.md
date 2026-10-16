@@ -24,9 +24,29 @@ npm run dev
 
 Buka http://127.0.0.1:5173. Dokumentasi API ada di http://127.0.0.1:8000/docs.
 
-Untuk dibuka orang lain, bangun image dari `Dockerfile` lalu jalankan di layanan yang menyediakan URL publik (misalnya Render, memakai `render.yaml`). Layanan harus membuka port `PORT`. Data tersimpan di SQLite pada disk layanan itu dan diperbarui otomatis setiap 2 jam.
-
 Atau dari akar proyek: `bash scripts/dev.sh`.
+
+## Deploy publik (GitHub + Render)
+
+Link publik yang **tetap** (tidak berganti seperti tunnel Codespace) memakai Render yang terhubung ke repo GitHub. Setiap `git push` ke `main` memicu build ulang dari `Dockerfile`.
+
+### Satu kali: hubungkan Render ke GitHub
+
+1. Buka [dashboard.render.com](https://dashboard.render.com) dan masuk dengan akun **GitHub** yang punya repo ini.
+2. **New** → **Blueprint** → pilih `emailnyaaes-hub/media-monitor-kpw-dki` (branch `main`).
+3. Apply blueprint dari `render.yaml`. Tunggu build Docker selesai (beberapa menit).
+4. Buka URL layanan, bentuknya `https://media-monitor-kpw-dki.onrender.com` (atau nama yang dipilih di dashboard).
+
+Detail verifikasi: [docs/DEPLOY.md](docs/DEPLOY.md).
+
+### Sesudah itu
+
+- Update kode → `git push origin main` → Render deploy otomatis.
+- Tutup Cursor **tidak** mematikan layanan.
+- Paket **free**: setelah idle ~15 menit app bisa sleep; buka pertama bisa 30–60 detik. URL tetap sama.
+- Data SQLite di free plan tidak punya disk permanen: hilang saat redeploy, lalu diisi lagi oleh penjadwal (setiap 2 jam WIB) atau tombol **Perbarui sekarang**.
+
+Jangan pakai Codespace + `trycloudflare.com` untuk akses publik harian; itu sementara dan URL-nya berganti.
 
 ## Akun
 
@@ -34,7 +54,7 @@ Atau dari akar proyek: `bash scripts/dev.sh`.
 | --- | --- | --- |
 | admin | admin123 | akses penuh: koreksi label, kata kunci, bobot, aturan, pengambilan data |
 
-Sandi ini hanya untuk latihan di komputer sendiri. Jangan membukanya ke jaringan kantor sebelum diganti.
+Sandi ini hanya untuk latihan. Ganti sebelum dibuka ke jaringan kantor.
 
 ## Isi layar
 
@@ -53,6 +73,7 @@ Filter tanggal, platform, dan kategori di bagian atas berlaku di semua halaman.
 
 ## Dokumen
 
+- [Deploy publik (GitHub + Render)](docs/DEPLOY.md)
 - [Arsitektur dan alur data](docs/ARSITEKTUR.md)
 - [Skema PostgreSQL](docs/SKEMA.sql)
 - [Klasifikasi dan skor risiko](docs/KLASIFIKASI.md)

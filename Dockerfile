@@ -11,8 +11,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -r
 COPY backend/requirements.txt backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 COPY backend/ backend/
+# SPA build: app.main DIST = /app/frontend/dist (parents[2] dari backend/app/main.py)
 COPY --from=web /src/frontend/dist frontend/dist
+RUN mkdir -p backend/data && chmod 777 backend/data
 WORKDIR /app/backend
 ENV PORT=8000
+ENV TZ=Asia/Jakarta
+ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
