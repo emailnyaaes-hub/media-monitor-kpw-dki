@@ -17,12 +17,16 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 SEED_DB = Path(__file__).resolve().parent.parent / "data" / "seed.db"
 
 
+def _on_vercel() -> bool:
+    return bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV") or os.environ.get("VERCEL_REGION"))
+
+
 def _data_dir() -> Path:
     # Vercel filesystem is read-only except /tmp.
     override = os.environ.get("BI_DATA_DIR", "").strip()
     if override:
         path = Path(override)
-    elif os.environ.get("VERCEL") == "1":
+    elif _on_vercel():
         path = Path("/tmp/danita-data")
     else:
         path = Path(__file__).resolve().parent.parent / "data"
@@ -30,12 +34,24 @@ def _data_dir() -> Path:
     return path
 
 
+def _mention_count(db_path: Path) -> int:
+    if not db_path.is_file() or db_path.stat().st_size < 1000:
+        return 0
+    try:
+        import sqlite3
+
+        with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
+            return int(conn.execute("select count(*) from mentions").fetchone()[0])
+    except Exception:
+        return 0
+
+
 def _ensure_seed(data_dir: Path) -> None:
     """Salin seed.db ke lokasi kerja bila database masih kosong (mis. cold start Vercel)."""
     target = data_dir / "monitor.db"
     if not SEED_DB.is_file():
         return
-    if target.is_file() and target.stat().st_size > 10_000:
+    if _mention_count(target) > 0:
         return
     shutil.copy2(SEED_DB, target)
 

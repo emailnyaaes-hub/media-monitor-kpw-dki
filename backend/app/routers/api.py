@@ -138,6 +138,8 @@ def _audit(db: Session, actor: str, action: str, entity_type: str, entity_id: in
 
 @router.get("/health")
 def health(db: Session = Depends(get_db)):
+    from app.database import DATA_DIR, SEED_DB
+
     mode = db.get(AppMeta, "data_mode")
     seeded = db.get(AppMeta, "seeded_at")
     return {
@@ -145,6 +147,9 @@ def health(db: Session = Depends(get_db)):
         "mode": mode.value if mode else "unknown",
         "seeded_at": seeded.value if seeded else None,
         "mentions": external_only(db.query(Mention), load_rules(db)).count(),
+        "mentions_raw": db.query(Mention).count(),
+        "seed_present": SEED_DB.is_file(),
+        "db_dir": str(DATA_DIR),
         "disclaimer": DISCLAIMER,
     }
 
