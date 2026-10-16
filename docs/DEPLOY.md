@@ -13,7 +13,7 @@ Satu **container Docker** (`Dockerfile.vercel`) berisi frontend (Vite build) + b
 - Tutup Cursor **tidak** mematikan app.
 - Push ke `main` + `vercel --prod`, atau hubungkan Git di dashboard Vercel untuk auto-deploy.
 - Cron Hobby: `GET /api/cron/ingest` sekali sehari (`0 1 * * *` UTC ≈ 08.00 WIB). Di luar itu pakai **Perbarui sekarang**.
-- SQLite di `/tmp` (ephemeral). Saat cold start, `backend/data/seed.db` disalin otomatis agar dashboard tidak kosong. Update seed: salin `monitor.db` lokal → `seed.db`, lalu redeploy. Untuk data tetap jangka panjang, set `BI_DATABASE_URL` ke Postgres.
+- SQLite di `/tmp` (ephemeral). Saat cold start, `backend/seed/seed.db` disalin otomatis agar dashboard tidak kosong. Update seed: salin `backend/data/monitor.db` lokal → `backend/seed/seed.db`, lalu redeploy. Untuk data tetap jangka panjang, set `BI_DATABASE_URL` ke Postgres.
 
 ## Deploy dari Cursor
 

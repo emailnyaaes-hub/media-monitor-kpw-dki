@@ -14,7 +14,7 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-SEED_DB = Path(__file__).resolve().parent.parent / "data" / "seed.db"
+SEED_DB = Path(__file__).resolve().parent.parent / "seed" / "seed.db"
 
 
 def _on_vercel() -> bool:

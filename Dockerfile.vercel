@@ -11,10 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -r
 COPY backend/requirements.txt backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 COPY backend/ backend/
-COPY backend/data/seed.db backend/data/seed.db
 # SPA build: app.main DIST = /app/frontend/dist (parents[2] dari backend/app/main.py)
 COPY --from=web /src/frontend/dist frontend/dist
-RUN mkdir -p backend/data && chmod 777 backend/data && test -f backend/data/seed.db
+RUN mkdir -p backend/data && chmod 777 backend/data && test -f backend/seed/seed.db
 WORKDIR /app/backend
 ENV PORT=8000
 ENV TZ=Asia/Jakarta

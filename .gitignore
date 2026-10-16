@@ -4,7 +4,6 @@ Untitled/
 **/__pycache__/
 **/*.pyc
 backend/data/*.db
-!backend/data/seed.db
 backend/data/nlp_config.json
 frontend/node_modules/
 frontend/dist/
