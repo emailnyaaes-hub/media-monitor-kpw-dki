@@ -8,7 +8,21 @@
 | Tutup Cursor | Bisa ikut mati (idle) | Tetap hidup |
 | Update | Manual restart | Push ke `main` |
 
-## Apply Blueprint (satu kali)
+## Deploy dari Cursor (disarankan)
+
+Render API butuh **satu kunci** (bukan login dashboard setiap deploy):
+
+1. Buka [API Keys di Render](https://dashboard.render.com/u/settings#api-keys) → **Create API Key** (login GitHub sekali).
+2. Tempel kunci di chat Cursor, atau jalankan lokal:
+
+```bash
+export RENDER_API_KEY=rnd_...
+python3 scripts/render_deploy.py
+```
+
+Script membuat layanan Docker dari repo GitHub, menunggu build, lalu mencetak URL `*.onrender.com`.
+
+## Apply Blueprint di dashboard (alternatif)
 
 1. Login [Render](https://dashboard.render.com) dengan GitHub.
 2. **New** → **Blueprint** → repo `media-monitor-kpw-dki`, branch `main`.
