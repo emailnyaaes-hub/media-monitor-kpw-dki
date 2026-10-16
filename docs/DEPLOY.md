@@ -1,61 +1,34 @@
 # Deploy Danita (GitHub + Vercel)
 
-## Ringkas
+## URL produksi
 
-| | Codespace + Cloudflare | Vercel + GitHub |
-| --- | --- | --- |
-| URL | Berganti setiap restart | Tetap (`*.vercel.app`) |
-| Tutup Cursor | Bisa ikut mati | Tetap hidup |
-| Update | Manual restart | Push ke `main` / `vercel --prod` |
+**https://media-monitor-kpw-dki.vercel.app**
 
-Danita di Vercel memakai **Services**: frontend Vite + backend FastAPI, rewrite `/api/*` ke backend. Refresh data lewat **Cron** `GET /api/cron/ingest` sekali sehari (Hobby: `0 1 * * *` UTC ≈ 08.00 WIB). Di luar itu pakai tombol **Perbarui sekarang**.
+Akun: `admin` / `admin123`
 
-SQLite di Vercel disimpan di `/tmp` (ephemeral): data bisa hilang saat cold start/redeploy, lalu diisi lagi oleh cron atau tombol **Perbarui sekarang**.
+## Cara kerja
 
-## Deploy dari Cursor / CLI
+Satu **container Docker** (`Dockerfile.vercel`) berisi frontend (Vite build) + backend (FastAPI/uvicorn). Rewrite semua traffic ke service `app`.
 
-```bash
-# sekali: login
-npx vercel login
+- Tutup Cursor **tidak** mematikan app.
+- Push ke `main` + `vercel --prod`, atau hubungkan Git di dashboard Vercel untuk auto-deploy.
+- Cron Hobby: `GET /api/cron/ingest` sekali sehari (`0 1 * * *` UTC ≈ 08.00 WIB). Di luar itu pakai **Perbarui sekarang**.
+- SQLite di `/tmp` (ephemeral pada instance Function). Untuk data tetap jangka panjang, set `BI_DATABASE_URL` ke Postgres.
 
-# production
-npx vercel --prod --yes
-```
-
-Atau tempel `VERCEL_TOKEN` (dari [vercel.com/account/tokens](https://vercel.com/account/tokens)):
+## Deploy dari Cursor
 
 ```bash
-export VERCEL_TOKEN=...
-npx vercel --prod --yes --token "$VERCEL_TOKEN"
+export PATH=".tools/node/bin:$PATH"
+.tools/vercel-cli/node_modules/.bin/vercel login   # sekali
+.tools/vercel-cli/node_modules/.bin/vercel --prod --yes --non-interactive
 ```
 
-## Connect repo di dashboard (alternatif)
-
-1. Buka [vercel.com/new](https://vercel.com/new) → import `emailnyaaes-hub/media-monitor-kpw-dki`.
-2. Root = `.` (bukan `frontend` saja) supaya `vercel.json` terbaca.
-3. Deploy. URL contoh: `https://media-monitor-kpw-dki.vercel.app`.
-
-Opsional di Project → Settings → Environment Variables:
-
-- `CRON_SECRET` — jika diisi, cron harus mengirim `Authorization: Bearer …` (Vercel Cron default memakai User-Agent `vercel-cron`).
+Pastikan Root Directory proyek = `.` (bukan `frontend`), Framework = Other / Services.
 
 ## Verifikasi
 
 ```bash
-BASE=https://YOUR-PROJECT.vercel.app
-
-curl -s -m 90 "$BASE/api/health"
-curl -s -o /dev/null -w "login %{http_code}\n" -m 90 "$BASE/login"
-curl -s -o /dev/null -w "admin %{http_code}\n" -m 90 \
-  -X POST -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}' \
-  "$BASE/api/auth/login"
+BASE=https://media-monitor-kpw-dki.vercel.app
+curl -s "$BASE/api/health"
+curl -s -o /dev/null -w "login %{http_code}\n" "$BASE/login"
 ```
-
-Akun: `admin` / `admin123`.
-
-## Batasan
-
-- Cold start pertama bisa beberapa detik.
-- SQLite di `/tmp` tidak permanen antar instance; untuk data tetap jangka panjang, sambungkan Postgres (`BI_DATABASE_URL`).
-- Cron timezone = UTC (`0 */2 * * *` ≈ setiap 2 jam).
