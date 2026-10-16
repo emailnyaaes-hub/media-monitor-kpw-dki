@@ -8,7 +8,7 @@
 | Tutup Cursor | Bisa ikut mati | Tetap hidup |
 | Update | Manual restart | Push ke `main` / `vercel --prod` |
 
-Danita di Vercel memakai **Services**: frontend Vite + backend FastAPI, rewrite `/api/*` ke backend. Refresh data lewat **Cron** `GET /api/cron/ingest` setiap 2 jam (UTC).
+Danita di Vercel memakai **Services**: frontend Vite + backend FastAPI, rewrite `/api/*` ke backend. Refresh data lewat **Cron** `GET /api/cron/ingest` sekali sehari (Hobby: `0 1 * * *` UTC ≈ 08.00 WIB). Di luar itu pakai tombol **Perbarui sekarang**.
 
 SQLite di Vercel disimpan di `/tmp` (ephemeral): data bisa hilang saat cold start/redeploy, lalu diisi lagi oleh cron atau tombol **Perbarui sekarang**.
 
