@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import Optional
 
 import json
+import os
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -1018,6 +1019,21 @@ def ingest_status(db: Session = Depends(get_db), _: CurrentUser = Depends(get_cu
 
 @router.post("/jobs/ingest")
 def job_ingest(db: Session = Depends(get_db), _: CurrentUser = Depends(require_admin)):
+    return ingest(db)
+
+
+@router.get("/cron/ingest")
+def cron_ingest(request: Request, db: Session = Depends(get_db)):
+    """Dipanggil Vercel Cron (GET). Auth: Bearer CRON_SECRET atau User-Agent vercel-cron."""
+    secret = os.environ.get("CRON_SECRET", "").strip()
+    auth = request.headers.get("authorization") or ""
+    agent = request.headers.get("user-agent") or ""
+    if secret and auth == f"Bearer {secret}":
+        pass
+    elif "vercel-cron" in agent.lower():
+        pass
+    else:
+        raise HTTPException(status_code=401, detail="Cron tidak diizinkan")
     return ingest(db)
 
 

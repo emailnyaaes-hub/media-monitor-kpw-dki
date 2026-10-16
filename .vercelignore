@@ -1,0 +1,14 @@
+.tools
+.tmp
+.venv
+backend/.venv
+backend/data
+frontend/node_modules
+frontend/dist
+**/__pycache__
+**/*.pyc
+.env
+.git
+*.log
+.DS_Store
+DEPLOY_STATUS.txt

@@ -1,42 +1,49 @@
-# Deploy Danita (GitHub + Render)
+# Deploy Danita (GitHub + Vercel)
 
 ## Ringkas
 
-| | Codespace + Cloudflare | Render + GitHub |
+| | Codespace + Cloudflare | Vercel + GitHub |
 | --- | --- | --- |
-| URL | Berganti setiap restart | Tetap (`*.onrender.com`) |
-| Tutup Cursor | Bisa ikut mati (idle) | Tetap hidup |
-| Update | Manual restart | Push ke `main` |
+| URL | Berganti setiap restart | Tetap (`*.vercel.app`) |
+| Tutup Cursor | Bisa ikut mati | Tetap hidup |
+| Update | Manual restart | Push ke `main` / `vercel --prod` |
 
-## Deploy dari Cursor (disarankan)
+Danita di Vercel memakai **Services**: frontend Vite + backend FastAPI, rewrite `/api/*` ke backend. Refresh data lewat **Cron** `GET /api/cron/ingest` setiap 2 jam (UTC).
 
-Render API butuh **satu kunci** (bukan login dashboard setiap deploy):
+SQLite di Vercel disimpan di `/tmp` (ephemeral): data bisa hilang saat cold start/redeploy, lalu diisi lagi oleh cron atau tombol **Perbarui sekarang**.
 
-1. Buka [API Keys di Render](https://dashboard.render.com/u/settings#api-keys) → **Create API Key** (login GitHub sekali).
-2. Tempel kunci di chat Cursor, atau jalankan lokal:
+## Deploy dari Cursor / CLI
 
 ```bash
-export RENDER_API_KEY=rnd_...
-python3 scripts/render_deploy.py
+# sekali: login
+npx vercel login
+
+# production
+npx vercel --prod --yes
 ```
 
-Script membuat layanan Docker dari repo GitHub, menunggu build, lalu mencetak URL `*.onrender.com`.
-
-## Apply Blueprint di dashboard (alternatif)
-
-1. Login [Render](https://dashboard.render.com) dengan GitHub.
-2. **New** → **Blueprint** → repo `media-monitor-kpw-dki`, branch `main`.
-3. Pastikan file `render.yaml` terbaca, lalu **Apply**.
-4. Di layanan web, salin **Public URL**.
-
-## Verifikasi setelah live
-
-Ganti `BASE` dengan URL Render Anda.
+Atau tempel `VERCEL_TOKEN` (dari [vercel.com/account/tokens](https://vercel.com/account/tokens)):
 
 ```bash
-BASE=https://media-monitor-kpw-dki.onrender.com
+export VERCEL_TOKEN=...
+npx vercel --prod --yes --token "$VERCEL_TOKEN"
+```
 
-# Bisa lambat 30–60 detik jika free plan baru bangun dari sleep
+## Connect repo di dashboard (alternatif)
+
+1. Buka [vercel.com/new](https://vercel.com/new) → import `emailnyaaes-hub/media-monitor-kpw-dki`.
+2. Root = `.` (bukan `frontend` saja) supaya `vercel.json` terbaca.
+3. Deploy. URL contoh: `https://media-monitor-kpw-dki.vercel.app`.
+
+Opsional di Project → Settings → Environment Variables:
+
+- `CRON_SECRET` — jika diisi, cron harus mengirim `Authorization: Bearer …` (Vercel Cron default memakai User-Agent `vercel-cron`).
+
+## Verifikasi
+
+```bash
+BASE=https://YOUR-PROJECT.vercel.app
+
 curl -s -m 90 "$BASE/api/health"
 curl -s -o /dev/null -w "login %{http_code}\n" -m 90 "$BASE/login"
 curl -s -o /dev/null -w "admin %{http_code}\n" -m 90 \
@@ -45,24 +52,10 @@ curl -s -o /dev/null -w "admin %{http_code}\n" -m 90 \
   "$BASE/api/auth/login"
 ```
 
-Yang diharapkan:
+Akun: `admin` / `admin123`.
 
-- `/api/health` → `"status":"ok"`
-- `/login` → `200`
-- login admin → `200`
-- Logo BI: `$BASE/img/bi-logo-white.png` → `200`
-- Setelah fetch pertama (beberapa menit), `mentions` di health naik; grafik Ringkasan terisi
+## Batasan
 
-## Redeploy
-
-```bash
-git push origin main
-```
-
-Render membangun ulang image Docker. Pantau log di dashboard Render.
-
-## Batasan free plan
-
-- Sleep setelah idle ~15 menit; cold start lambat.
-- SQLite tanpa persistent disk: data hilang saat redeploy, lalu diisi ulang oleh scheduler.
-- Untuk nyala 24 jam tanpa sleep dan disk tetap, naikkan ke paket berbayar di Render (atau VPS).
+- Cold start pertama bisa beberapa detik.
+- SQLite di `/tmp` tidak permanen antar instance; untuk data tetap jangka panjang, sambungkan Postgres (`BI_DATABASE_URL`).
+- Cron timezone = UTC (`0 */2 * * *` ≈ setiap 2 jam).

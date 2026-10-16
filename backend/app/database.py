@@ -13,8 +13,20 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+def _data_dir() -> Path:
+    # Vercel filesystem is read-only except /tmp.
+    override = os.environ.get("BI_DATA_DIR", "").strip()
+    if override:
+        path = Path(override)
+    elif os.environ.get("VERCEL") == "1":
+        path = Path("/tmp/danita-data")
+    else:
+        path = Path(__file__).resolve().parent.parent / "data"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+DATA_DIR = _data_dir()
 
 DEFAULT_URL = f"sqlite:///{DATA_DIR / 'monitor.db'}"
 DATABASE_URL = os.environ.get("BI_DATABASE_URL", DEFAULT_URL)

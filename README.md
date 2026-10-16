@@ -26,27 +26,18 @@ Buka http://127.0.0.1:5173. Dokumentasi API ada di http://127.0.0.1:8000/docs.
 
 Atau dari akar proyek: `bash scripts/dev.sh`.
 
-## Deploy publik (GitHub + Render)
+## Deploy publik (GitHub + Vercel)
 
-Link publik yang **tetap** (tidak berganti seperti tunnel Codespace) memakai Render yang terhubung ke repo GitHub. Setiap `git push` ke `main` memicu build ulang dari `Dockerfile`.
+Link publik yang **tetap** memakai [Vercel](https://vercel.com) (frontend Vite + backend FastAPI lewat `vercel.json`). Tutup Cursor tidak mematikan app.
 
-### Satu kali: hubungkan Render ke GitHub
+```bash
+npx vercel login
+npx vercel --prod --yes
+```
 
-1. Buka [dashboard.render.com](https://dashboard.render.com) dan masuk dengan akun **GitHub** yang punya repo ini.
-2. **New** → **Blueprint** → pilih `emailnyaaes-hub/media-monitor-kpw-dki` (branch `main`).
-3. Apply blueprint dari `render.yaml`. Tunggu build Docker selesai (beberapa menit).
-4. Buka URL layanan, bentuknya `https://media-monitor-kpw-dki.onrender.com` (atau nama yang dipilih di dashboard).
+Atau import repo di [vercel.com/new](https://vercel.com/new) (root proyek, bukan hanya folder `frontend`).
 
-Detail verifikasi: [docs/DEPLOY.md](docs/DEPLOY.md).
-
-### Sesudah itu
-
-- Update kode → `git push origin main` → Render deploy otomatis.
-- Tutup Cursor **tidak** mematikan layanan.
-- Paket **free**: setelah idle ~15 menit app bisa sleep; buka pertama bisa 30–60 detik. URL tetap sama.
-- Data SQLite di free plan tidak punya disk permanen: hilang saat redeploy, lalu diisi lagi oleh penjadwal (setiap 2 jam WIB) atau tombol **Perbarui sekarang**.
-
-Jangan pakai Codespace + `trycloudflare.com` untuk akses publik harian; itu sementara dan URL-nya berganti.
+Detail: [docs/DEPLOY.md](docs/DEPLOY.md). Data SQLite di Vercel ephemeral (`/tmp`); refresh otomatis lewat Cron setiap 2 jam atau tombol **Perbarui sekarang**.
 
 ## Akun
 

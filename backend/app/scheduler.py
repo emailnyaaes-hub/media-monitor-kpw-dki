@@ -20,7 +20,8 @@ scheduler = BackgroundScheduler(timezone=WIB)
 def start_scheduler() -> None:
     import os
 
-    if os.environ.get("BI_DISABLE_SCHEDULER") == "1":
+    if os.environ.get("BI_DISABLE_SCHEDULER") == "1" or os.environ.get("VERCEL") == "1":
+        # Di Vercel pakai Cron Jobs (GET /api/cron/ingest), bukan proses background.
         return
     if scheduler.running:
         return
