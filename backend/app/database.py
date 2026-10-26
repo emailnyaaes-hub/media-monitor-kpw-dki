@@ -56,14 +56,46 @@ def _ensure_seed(data_dir: Path) -> None:
     shutil.copy2(SEED_DB, target)
 
 
-DATA_DIR = _data_dir()
-_ensure_seed(DATA_DIR)
+def _postgres_url(raw: str) -> str:
+    if raw.startswith("postgres://"):
+        raw = "postgresql://" + raw[len("postgres://") :]
+    if raw.startswith("postgresql://") and "+" not in raw.split("://", 1)[0]:
+        raw = "postgresql+psycopg://" + raw[len("postgresql://") :]
+    return raw
 
-DEFAULT_URL = f"sqlite:///{DATA_DIR / 'monitor.db'}"
-DATABASE_URL = os.environ.get("BI_DATABASE_URL", DEFAULT_URL)
 
-connect_args = {"check_same_thread": False, "timeout": 30} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, connect_args=connect_args, future=True)
+def _resolve_url() -> str:
+    # Unpooled lebih aman untuk proses uvicorn yang memegang koneksi sendiri.
+    raw = (
+        os.environ.get("BI_DATABASE_URL")
+        or os.environ.get("DATABASE_URL_UNPOOLED")
+        or os.environ.get("POSTGRES_URL_NON_POOLING")
+        or os.environ.get("DATABASE_URL")
+        or os.environ.get("POSTGRES_URL")
+        or ""
+    ).strip()
+    if raw:
+        return _postgres_url(raw)
+    data_dir = _data_dir()
+    _ensure_seed(data_dir)
+    return f"sqlite:///{data_dir / 'monitor.db'}"
+
+
+DATABASE_URL = _resolve_url()
+IS_SQLITE = DATABASE_URL.startswith("sqlite")
+
+if IS_SQLITE:
+    connect_args = {"check_same_thread": False, "timeout": 30}
+else:
+    # PgBouncer (Neon pooler) menolak prepared statement.
+    connect_args = {"prepare_threshold": None}
+
+engine = create_engine(
+    DATABASE_URL,
+    connect_args=connect_args,
+    pool_pre_ping=True,
+    future=True,
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
 
@@ -77,7 +109,7 @@ def init_db() -> None:
     from app import models  # noqa: F401  — daftarkan tabel sebelum create_all
 
     Base.metadata.create_all(bind=engine)
-    if not DATABASE_URL.startswith("sqlite"):
+    if not IS_SQLITE:
         return
     columns = {column["name"] for column in inspect(engine).get_columns("mentions")}
     if "quotes_bi" not in columns:
