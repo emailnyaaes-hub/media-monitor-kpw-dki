@@ -9,7 +9,7 @@ from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
-from app.models import Issue, Mention
+from app.models import Advice, Alert, Issue, Mention
 from app.nlp.risk import score_risk
 from app.services.clock import now_wib
 
@@ -73,6 +73,8 @@ def rebuild_issues(db: Session) -> int:
     for stale in db.query(Issue).all():
         if stale.code.startswith("LIVE-") and stale.code not in kept_codes and not stale.analyst_note:
             db.query(Mention).filter(Mention.issue_id == stale.id).update({Mention.issue_id: None})
+            db.query(Alert).filter(Alert.issue_id == stale.id).update({Alert.issue_id: None})
+            db.query(Advice).filter(Advice.issue_id == stale.id).update({Advice.issue_id: None})
             db.delete(stale)
     db.commit()
     return created
