@@ -12,7 +12,6 @@ import { inputClass } from './Ui'
 
 const NAV = [
   { to: '/', label: 'Ringkasan' },
-  { to: '/eksekutif', label: 'Executive Summary' },
   { to: '/isu', label: 'Isu & Tren' },
   { to: '/review', label: 'Review Konten' },
   { to: '/suara', label: 'Suara Publik' },

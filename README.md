@@ -57,7 +57,7 @@ Sandi ini hanya untuk latihan. Ganti sebelum dibuka ke jaringan kantor.
 - **Sumber**: peringkat media dan akun. Akun mencurigakan ditandai "perlu diverifikasi".
 - **Explorer**: tabel, filter, status penanganan, ekspor CSV.
 - **Alert**: aturan dan notifikasi di dalam dashboard.
-- **Executive Summary**: tiga tabel Top 10 (nasional, KPw DKI, KPw provinsi lain), ringkasan dari data tersimpan, Excel, dan cetak PDF.
+- **Ringkasan**: angka situasi, grafik, dan tiga tabel Top 10 isu (nasional, KPw DKI, KPw provinsi lain), plus unduh Excel dan cetak PDF.
 - **Review Konten**: pemeriksaan draf siaran pers atau caption. Draf tidak disimpan kecuali dicentang.
 - **Laporan**: ringkasan dan unduh CSV mention.
 - **Kata Kunci** dan **Pengaturan**: kamus, boolean, dan bobot risiko.

@@ -3,7 +3,6 @@ import { useAuth } from './auth'
 import Layout from './components/Layout'
 import AdvicePage from './pages/Advice'
 import AlertsPage from './pages/Alerts'
-import ExecutivePage from './pages/Executive'
 import ExplorerPage from './pages/Explorer'
 import IssueDetailPage from './pages/IssueDetail'
 import IssuesPage from './pages/Issues'
@@ -32,7 +31,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route element={<Guard />}>
         <Route path="/" element={<OverviewPage />} />
-        <Route path="/eksekutif" element={<ExecutivePage />} />
+        <Route path="/eksekutif" element={<Navigate to="/" replace />} />
         <Route path="/review" element={<ReviewPage />} />
         <Route path="/saran" element={<AdvicePage />} />
         <Route path="/sentimen" element={<SentimentPage />} />

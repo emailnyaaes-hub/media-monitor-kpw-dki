@@ -4,6 +4,7 @@ import { useApi } from '../api'
 import type { AdviceItem } from '../components/AdviceCard'
 import { priorityOf } from '../components/AdviceCard'
 import { Donut, TrendChart } from '../components/Charts'
+import ExecutivePage from './Executive'
 import BackToGeneral from '../components/BackToGeneral'
 import ChartInsight from '../components/ChartInsight'
 import RecommendationDrawer from '../components/RecommendationDrawer'
@@ -181,6 +182,9 @@ export default function OverviewPage() {
           {picked && <RecommendationDrawer item={picked} disclaimer={advice.data?.disclaimer || ''} onClose={() => setPicked(null)} onChanged={advice.reload} />}
         </>
       )}
+      <section className="mt-2 border-t border-line pt-3">
+        <ExecutivePage />
+      </section>
     </div>
   )
 }
