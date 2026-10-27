@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+import html
 import json
 import os
 from datetime import date
@@ -1185,6 +1186,212 @@ def export_policy_html(
     from app.services.dss_export import policy_html
 
     return HTMLResponse(policy_html(db, topic))
+
+
+class ReviewBody(BaseModel):
+    kind: str = "siaran"
+    platform: str = ""
+    text: str = ""
+    topic: str = ""
+    audience: str = ""
+    release_date: str = ""
+    save: bool = False
+
+
+class ReviewExportBody(BaseModel):
+    original: str = ""
+    revised: str = ""
+    findings: list = Field(default_factory=list)
+    score: int = 0
+    status: str = ""
+
+
+@router.get("/executive")
+def get_executive(
+    scope: str = "nasional",
+    province: str = "",
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    platform: Optional[str] = None,
+    category: Optional[str] = None,
+    location: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(get_current_user),
+):
+    from app.services.executive import build, provinces
+
+    try:
+        data = build(db, _window(date_from, date_to, platform, category, location), scope, province, False)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    data["province_options"] = provinces()
+    return data
+
+
+@router.post("/executive/refresh")
+def refresh_executive(
+    scope: str = "nasional",
+    province: str = "",
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    platform: Optional[str] = None,
+    category: Optional[str] = None,
+    location: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(get_current_user),
+):
+    from app.services.executive import build, provinces
+
+    try:
+        data = build(db, _window(date_from, date_to, platform, category, location), scope, province, True)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    data["province_options"] = provinces()
+    return data
+
+
+@router.get("/executive/export.xlsx")
+def export_executive_xlsx(
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    platform: Optional[str] = None,
+    category: Optional[str] = None,
+    location: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(get_current_user),
+):
+    from app.services.executive import workbook
+
+    return Response(
+        content=workbook(db, _window(date_from, date_to, platform, category, location)),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=executive-summary.xlsx"},
+    )
+
+
+@router.get("/executive/laporan.html", response_class=HTMLResponse)
+def export_executive_html(
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    platform: Optional[str] = None,
+    category: Optional[str] = None,
+    location: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(get_current_user),
+):
+    from app.services.executive import build
+
+    window = _window(date_from, date_to, platform, category, location)
+    blocks = []
+    for scope, title in (("nasional", "Top 10 Isu Nasional"), ("dki", "Top 10 Isu KPw DKI Jakarta"), ("lainnya", "Top 10 Isu KPw Provinsi Lain")):
+        data = build(db, window, scope)
+        rows = []
+        for item in data["items"]:
+            links = "".join(
+                f"<li><a href=\"{html.escape(link['url'], quote=True)}\">{html.escape(link['source_name'])}: {html.escape(link['title'])}</a></li>"
+                for link in item["links"]
+            )
+            rows.append(
+                f"<h3>{item['rank']}. {html.escape(item['title'])} ({html.escape(item['stance'])})</h3>"
+                f"<p>{html.escape(item['summary'])}</p><ul>{links}</ul>"
+            )
+        blocks.append(f"<h2>{title}</h2>{''.join(rows) or '<p>Belum ada isu dengan minimal dua tautan.</p>'}")
+    page = (
+        "<!doctype html><html lang=\"id\"><head><meta charset=\"utf-8\"><title>Executive Summary</title>"
+        "<style>body{font-family:sans-serif;max-width:800px;margin:24px} a{color:#0A4A94}</style></head><body>"
+        "<p>Alat bantu. Cetak lewat menu browser untuk PDF. Tautan hanya dari data tersimpan.</p>"
+        + "".join(blocks)
+        + "</body></html>"
+    )
+    return HTMLResponse(page)
+
+
+@router.post("/review")
+def post_review(body: ReviewBody, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    from app.models import ContentReview
+    from app.services.content_review import review
+
+    result = review(body.text, body.kind, body.platform)
+    result["topic"] = body.topic
+    result["audience"] = body.audience
+    result["release_date"] = body.release_date
+    result["saved"] = False
+    if body.save and not result.get("error"):
+        row = ContentReview(
+            kind=body.kind,
+            platform=body.platform,
+            topic=body.topic,
+            score=result["score"],
+            status=result["status"],
+            original=result["original"],
+            revised=result["revised"],
+            findings=json.dumps(result["findings"], ensure_ascii=False),
+        )
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        result["saved"] = True
+        result["id"] = row.id
+        _audit(db, user.username, "simpan_review", "content_review", str(row.id), "", body.kind)
+        db.commit()
+    return result
+
+
+@router.post("/review/export.docx")
+def export_review_docx(body: ReviewExportBody, _: CurrentUser = Depends(get_current_user)):
+    from app.services.content_review import docx_bytes
+
+    payload = docx_bytes(body.original, body.revised, body.findings, body.score, body.status)
+    return Response(
+        content=payload,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": "attachment; filename=review-konten.docx"},
+    )
+
+
+@router.get("/reviews")
+def list_reviews(db: Session = Depends(get_db), _: CurrentUser = Depends(get_current_user)):
+    from app.models import ContentReview
+
+    rows = db.query(ContentReview).order_by(ContentReview.created_at.desc()).limit(20).all()
+    return {
+        "items": [
+            {
+                "id": row.id,
+                "created_at": row.created_at.isoformat(timespec="minutes"),
+                "kind": row.kind,
+                "platform": row.platform,
+                "topic": row.topic,
+                "score": row.score,
+                "status": row.status,
+            }
+            for row in rows
+        ]
+    }
+
+
+@router.get("/reviews/{review_id}")
+def get_review(review_id: int, db: Session = Depends(get_db), _: CurrentUser = Depends(get_current_user)):
+    from app.models import ContentReview
+    from app.services.content_review import DISCLAIMER
+
+    row = db.get(ContentReview, review_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Riwayat tidak ditemukan")
+    return {
+        "disclaimer": DISCLAIMER,
+        "kind": row.kind,
+        "platform": row.platform,
+        "topic": row.topic,
+        "original": row.original,
+        "revised": row.revised,
+        "findings": json.loads(row.findings or "[]"),
+        "score": row.score,
+        "status": row.status,
+        "counts": {},
+        "saved": True,
+        "method": "tersimpan",
+    }
 
 
 @router.get("/audit")

@@ -1,6 +1,6 @@
 import { AlertTriangle, Bell, LogOut, Menu, Moon, Search, Settings, Sun, X } from 'lucide-react'
-import { FormEvent, useEffect, useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { FormEvent, useEffect, useRef, useState } from 'react'
+import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, useApi } from '../api'
 import { useAuth } from '../auth'
 import { useFilters } from '../filters'
@@ -12,7 +12,9 @@ import { inputClass } from './Ui'
 
 const NAV = [
   { to: '/', label: 'Ringkasan' },
+  { to: '/eksekutif', label: 'Executive Summary' },
   { to: '/isu', label: 'Isu & Tren' },
+  { to: '/review', label: 'Review Konten' },
   { to: '/suara', label: 'Suara Publik' },
   { to: '/solusi', label: 'Keluhan ke Solusi' },
   { to: '/alat', label: 'Peta Tools' },
@@ -61,6 +63,33 @@ export default function Layout() {
   const [tourStep, setTourStep] = useState<number | null>(null)
   const [viewName, setViewName] = useState('')
   const [views, setViews] = useState<SavedView[]>(() => readViews())
+  const [searchParams, setSearchParams] = useSearchParams()
+  const urlReady = useRef(false)
+
+  useEffect(() => {
+    if (urlReady.current) return
+    urlReady.current = true
+    const dari = searchParams.get('dari')
+    const sampai = searchParams.get('sampai')
+    if (dari && sampai) {
+      filters.apply({
+        dateFrom: dari,
+        dateTo: sampai,
+        platform: searchParams.get('platform') || 'semua',
+        category: searchParams.get('kategori') || 'semua',
+      })
+    }
+  }, [filters, searchParams])
+
+  useEffect(() => {
+    if (!urlReady.current) return
+    const next = new URLSearchParams()
+    next.set('dari', filters.dateFrom)
+    next.set('sampai', filters.dateTo)
+    if (filters.platform !== 'semua') next.set('platform', filters.platform)
+    if (filters.category !== 'semua') next.set('kategori', filters.category)
+    setSearchParams(next, { replace: true })
+  }, [filters.dateFrom, filters.dateTo, filters.platform, filters.category, setSearchParams, urlReady])
   const alerts = useApi<{ unread: number; items: AlertItem[] }>('/api/alerts')
   const unread = alerts.data?.items.filter((item) => !item.is_read).length || 0
 

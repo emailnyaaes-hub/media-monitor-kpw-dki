@@ -3,6 +3,7 @@ import { useAuth } from './auth'
 import Layout from './components/Layout'
 import AdvicePage from './pages/Advice'
 import AlertsPage from './pages/Alerts'
+import ExecutivePage from './pages/Executive'
 import ExplorerPage from './pages/Explorer'
 import IssueDetailPage from './pages/IssueDetail'
 import IssuesPage from './pages/Issues'
@@ -10,6 +11,7 @@ import KeywordsPage from './pages/Keywords'
 import Login from './pages/Login'
 import OverviewPage from './pages/Overview'
 import ReportsPage from './pages/Reports'
+import ReviewPage from './pages/Review'
 import SentimentPage from './pages/Sentiment'
 import SettingsPage from './pages/Settings'
 import SolusiPage from './pages/Solusi'
@@ -30,6 +32,8 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route element={<Guard />}>
         <Route path="/" element={<OverviewPage />} />
+        <Route path="/eksekutif" element={<ExecutivePage />} />
+        <Route path="/review" element={<ReviewPage />} />
         <Route path="/saran" element={<AdvicePage />} />
         <Route path="/sentimen" element={<SentimentPage />} />
         <Route path="/isu" element={<IssuesPage />} />

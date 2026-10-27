@@ -57,7 +57,9 @@ Sandi ini hanya untuk latihan. Ganti sebelum dibuka ke jaringan kantor.
 - **Sumber**: peringkat media dan akun. Akun mencurigakan ditandai "perlu diverifikasi".
 - **Explorer**: tabel, filter, status penanganan, ekspor CSV.
 - **Alert**: aturan dan notifikasi di dalam dashboard.
-- **Laporan**: ringkasan, Excel, salindia PPTX, dan cetak PDF.
+- **Executive Summary**: tiga tabel Top 10 (nasional, KPw DKI, KPw provinsi lain), ringkasan dari data tersimpan, Excel, dan cetak PDF.
+- **Review Konten**: pemeriksaan draf siaran pers atau caption. Draf tidak disimpan kecuali dicentang.
+- **Laporan**: ringkasan dan unduh CSV mention.
 - **Kata Kunci** dan **Pengaturan**: kamus, boolean, dan bobot risiko.
 
 Filter tanggal, platform, dan kategori di bagian atas berlaku di semua halaman.
@@ -72,7 +74,7 @@ Filter tanggal, platform, dan kategori di bagian atas berlaku di semua halaman.
 
 ## Sumber data
 
-Salin `backend/.env.example` menjadi `backend/.env` bila ada kunci API. Penjadwal mengambil data baru setiap 2 jam (WIB). Admin dapat menekan **Perbarui sekarang**.
+Salin `backend/.env.example` menjadi `backend/.env` bila ada kunci API. `LLM_API_KEY` opsional: tanpa kunci, Executive Summary dan Review Konten tetap jalan dengan aturan yang hanya memakai teks tersimpan atau pola kata. Penjadwal mengambil data baru setiap 2 jam di komputer lokal. Di Vercel, cron harian memanggil `/api/cron/ingest`. Admin dapat menekan **Perbarui sekarang**.
 
 Yang dipakai tanpa kunci:
 

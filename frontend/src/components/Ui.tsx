@@ -49,7 +49,10 @@ export function StanceBadge({ stance }: { stance: Stance }) {
   }[stance]
   const Icon = map.icon
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${map.className}`}>
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${map.className}`}
+      title={stance === 'upside' ? 'Nada dominan positif (Upside)' : stance === 'downside' ? 'Nada dominan negatif (Downside)' : 'Nada dominan netral'}
+    >
       <Icon size={13} aria-hidden />
       {map.label}
     </span>

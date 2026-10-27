@@ -283,3 +283,32 @@ class AppMeta(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(Text, default="")
+
+
+class ExecutiveCache(Base):
+    """Ringkasan Top 10 yang sudah disusun, supaya tidak dihitung ulang tiap buka halaman."""
+
+    __tablename__ = "executive_cache"
+    __table_args__ = (UniqueConstraint("cache_key", name="uq_executive_cache_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    cache_key: Mapped[str] = mapped_column(String(180), nullable=False)
+    payload: Mapped[str] = mapped_column(Text, default="{}")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class ContentReview(Base):
+    """Riwayat review draf. Hanya ditulis bila pengguna setuju menyimpan."""
+
+    __tablename__ = "content_reviews"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    platform: Mapped[str] = mapped_column(String(32), default="")
+    topic: Mapped[str] = mapped_column(String(200), default="")
+    score: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(32), default="")
+    original: Mapped[str] = mapped_column(Text, default="")
+    revised: Mapped[str] = mapped_column(Text, default="")
+    findings: Mapped[str] = mapped_column(Text, default="[]")
