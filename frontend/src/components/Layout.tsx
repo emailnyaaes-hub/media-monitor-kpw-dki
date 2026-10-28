@@ -37,10 +37,10 @@ const CATEGORIES = [
 ]
 
 const TOUR = [
-  'Di paling atas, kalimat situasi menjawab apakah ada masalah sekarang.',
-  'Daftar Perlu perhatian sekarang menunjukkan isu yang paling penting. Tekan Lihat.',
-  'Di bawah grafik ada tiga saran tindakan. Terima, tolak, atau tunda di Pusat Saran.',
-  'Filter tanggal, platform, dan kategori ada di header. Chip aktif bisa dihapus.',
+  'Ringkasan dibaca seperti beranda berita. Mulai dari judul utama, lalu Terpopuler di kanan.',
+  'Pilih rubrik di atas daftar, misalnya Rupiah atau KPw DKI, untuk mengganti kanal.',
+  'Klik judul untuk membuka berita asli di tab baru. Lihat semua membuka seluruh daftar.',
+  'Filter tanggal dan platform tetap di header. Chip aktif bisa dihapus.',
 ]
 
 interface SavedView {

@@ -99,9 +99,9 @@ export default function ExecutivePage() {
 
   return (
     <div>
-      <div className="mb-3">
-        <h2 className="text-base font-medium">Top 10 isu</h2>
-        <p className="text-sm text-muted">Sepuluh isu teratas untuk pimpinan. Ringkasan dan tautan hanya berasal dari berita yang sudah tersimpan.</p>
+      <div className="mb-3 border-b-2 border-ink pb-1">
+        <h2 className="text-sm font-bold uppercase tracking-[0.16em]">Fokus isu</h2>
+        <p className="mt-1 text-sm text-muted">Sepuluh isu teratas. Buka judul untuk membaca ringkasan dan tautan sumber.</p>
       </div>
       <div className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label="Cakupan isu">
         {TABS.map((tab) => (
