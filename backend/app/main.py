@@ -6,6 +6,8 @@ Jalankan dari folder backend:
 
 from __future__ import annotations
 
+import logging
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -20,10 +22,11 @@ from app.scheduler import start_scheduler, stop_scheduler
 from app.seed import purge_mock, seed_if_empty
 
 load_env()
+log = logging.getLogger("bi.startup")
 
 
-@asynccontextmanager
-async def lifespan(_: FastAPI):
+def _prepare_database() -> None:
+    """Jalan di thread terpisah supaya halaman login tidak menunggu Neon bangun."""
     init_db()
     db = SessionLocal()
     try:
@@ -40,6 +43,18 @@ async def lifespan(_: FastAPI):
         refresh_advices(db)
     finally:
         db.close()
+
+
+def _prepare_database_safely() -> None:
+    try:
+        _prepare_database()
+    except Exception:
+        log.exception("Penyiapan basis data gagal. Halaman tetap dilayani.")
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    threading.Thread(target=_prepare_database_safely, name="startup-db", daemon=True).start()
     start_scheduler()
     yield
     stop_scheduler()

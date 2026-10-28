@@ -88,12 +88,14 @@ if IS_SQLITE:
     connect_args = {"check_same_thread": False, "timeout": 30}
 else:
     # PgBouncer (Neon pooler) menolak prepared statement.
-    connect_args = {"prepare_threshold": None}
+    # connect_timeout mencegah proses macet selamanya saat Neon baru bangun.
+    connect_args = {"prepare_threshold": None, "connect_timeout": 15}
 
 engine = create_engine(
     DATABASE_URL,
     connect_args=connect_args,
     pool_pre_ping=True,
+    pool_timeout=20,
     future=True,
 )
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
