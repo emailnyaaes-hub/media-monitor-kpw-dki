@@ -58,17 +58,57 @@ class FetchReport:
     items: list[RawItem] = field(default_factory=list)
 
 
-def collect_reports(since: datetime, rules: list | None = None) -> list[FetchReport]:
+def collect_reports(since: datetime, rules: list | None = None, mode: str = "penuh") -> list[FetchReport]:
+    """Ambil laporan sumber.
+
+    mode=cepat: hanya RSS langsung + GDELT (untuk tombol Perbarui, selesai dalam ~1 menit).
+    mode=penuh: semua sumber, dengan batas waktu agar tidak menggantung di Vercel.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     global _active_rules
     _active_rules = list(rules or [])
+    started = time.monotonic()
+    budget = 50 if mode == "cepat" else 220
     try:
-        reports = [fetch_direct(name, tier, url, since) for name, tier, url in DIRECT_FEEDS]
-        reports.append(fetch_google_news(since))
-        reports.extend(fetch_google_site(name, domain, since) for name, domain in GOOGLE_SITE_FEEDS)
-        reports.append(fetch_gdelt(since))
-        reports.append(fetch_newsapi(since))
-        reports.append(fetch_youtube(since))
-        reports.extend(fetch_social(since))
+        reports: list[FetchReport] = []
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            futures = {
+                pool.submit(fetch_direct, name, tier, url, since): name
+                for name, tier, url in DIRECT_FEEDS
+            }
+            try:
+                for future in as_completed(futures, timeout=max(8, min(40, budget - 5))):
+                    name = futures[future]
+                    try:
+                        reports.append(future.result())
+                    except Exception as exc:
+                        reports.append(FetchReport(name, "gagal", f"Sumber tidak tersedia. RSS gagal: {exc.__class__.__name__}"))
+            except TimeoutError:
+                for future, name in futures.items():
+                    if future.done():
+                        continue
+                    future.cancel()
+                    reports.append(FetchReport(name, "gagal", "Sumber tidak tersedia. Batas waktu pengambilan habis."))
+        if time.monotonic() - started < budget:
+            reports.append(fetch_gdelt(since))
+        if mode == "cepat":
+            reports.extend(unavailable_social())
+            return reports
+        remaining = lambda: budget - (time.monotonic() - started)
+        if remaining() > 40:
+            reports.append(fetch_google_news(since, deadline=started + budget - 10))
+        if remaining() > 30:
+            for name, domain in GOOGLE_SITE_FEEDS:
+                if remaining() < 25:
+                    break
+                reports.append(fetch_google_site(name, domain, since))
+        if remaining() > 20:
+            reports.append(fetch_newsapi(since))
+        if remaining() > 20:
+            reports.append(fetch_youtube(since, deadline=started + budget - 5))
+        if remaining() > 20:
+            reports.extend(fetch_social(since, deadline=started + budget - 5))
         reports.extend(unavailable_social())
         return reports
     finally:
@@ -122,15 +162,16 @@ def _relevant(item: RawItem) -> bool:
     return any(term in hay for term in RELEVANT)
 
 
-def fetch_google_news(since: datetime) -> FetchReport:
+def fetch_google_news(since: datetime, deadline: float | None = None) -> FetchReport:
     items: list[RawItem] = []
     errors = 0
     for query in GOOGLE_QUERIES:
+        if deadline is not None and time.monotonic() > deadline:
+            break
         try:
-            batch, failed = _google_query(query, since, limit=4)
+            batch, failed = _google_query(query, since, limit=3, deadline=deadline)
             items.extend(batch)
             errors += failed
-            time.sleep(0.3)
         except Exception:
             errors += 1
     if not items and errors:
@@ -168,7 +209,7 @@ def fetch_google_site(name: str, domain: str, since: datetime) -> FetchReport:
     )
 
 
-def _google_query(query: str, since: datetime, limit: int) -> tuple[list[RawItem], int]:
+def _google_query(query: str, since: datetime, limit: int, deadline: float | None = None) -> tuple[list[RawItem], int]:
     address = (
         "https://news.google.com/rss/search?q="
         + quote(f"{_exclude_owned_sites(query)} when:14d")
@@ -178,6 +219,8 @@ def _google_query(query: str, since: datetime, limit: int) -> tuple[list[RawItem
     kept: list[RawItem] = []
     failed = 0
     for item in raw_items:
+        if deadline is not None and time.monotonic() > deadline:
+            break
         if item.published_at < since:
             continue
         if len(kept) >= limit:
@@ -201,7 +244,6 @@ def _google_query(query: str, since: datetime, limit: int) -> tuple[list[RawItem
         if _owned(item):
             continue
         kept.append(item)
-        time.sleep(0.25)
     return kept, failed
 
 
@@ -288,7 +330,7 @@ def fetch_newsapi(since: datetime) -> FetchReport:
 YOUTUBE_CHANNELS: list[tuple[str, str, str]] = []
 
 
-def fetch_youtube(since: datetime) -> FetchReport:
+def fetch_youtube(since: datetime, deadline: float | None = None) -> FetchReport:
     items: list[RawItem] = []
     errors: list[str] = []
     for channel_id, _name, handle in YOUTUBE_CHANNELS:
@@ -299,7 +341,7 @@ def fetch_youtube(since: datetime) -> FetchReport:
             errors.append(f"{handle}: {exc.__class__.__name__}")
     wide = min(since, now_wib() - timedelta(days=14))
     try:
-        found, failed = _google_query('"Bank Indonesia" site:youtube.com', wide, limit=5)
+        found, failed = _google_query('"Bank Indonesia" site:youtube.com', wide, limit=3, deadline=deadline)
     except Exception as exc:
         found, failed = [], 1
         errors.append(f"Google News YouTube: {exc.__class__.__name__}")
@@ -390,14 +432,19 @@ SOCIAL_QUERIES = [
     ("Facebook", "facebook", ("facebook.com",), '"Bank Indonesia" site:facebook.com'),
 ]
 
-def fetch_social(since: datetime) -> list[FetchReport]:
+def fetch_social(since: datetime, deadline: float | None = None) -> list[FetchReport]:
     wide = min(since, now_wib() - timedelta(days=14))
-    return [_fetch_social_one(name, platform, hosts, query, wide) for name, platform, hosts, query in SOCIAL_QUERIES]
+    reports = []
+    for name, platform, hosts, query in SOCIAL_QUERIES:
+        if deadline is not None and time.monotonic() > deadline:
+            break
+        reports.append(_fetch_social_one(name, platform, hosts, query, wide, deadline=deadline))
+    return reports
 
 
-def _fetch_social_one(name: str, platform: str, hosts: tuple[str, ...], query: str, since: datetime) -> FetchReport:
+def _fetch_social_one(name: str, platform: str, hosts: tuple[str, ...], query: str, since: datetime, deadline: float | None = None) -> FetchReport:
     try:
-        items, failed = _social_query(query, since, platform, hosts, name, limit=5)
+        items, failed = _social_query(query, since, platform, hosts, name, limit=3, deadline=deadline)
     except Exception as exc:
         return FetchReport(name, "gagal", f"Sumber tidak tersedia. Pencarian {name} gagal: {exc.__class__.__name__}: {exc}")
     if not items and failed:
@@ -410,7 +457,7 @@ def _fetch_social_one(name: str, platform: str, hosts: tuple[str, ...], query: s
     return FetchReport(name, "berhasil", f"{len(items)} unggahan {name} dengan tautan asli.{note}", items)
 
 
-def _social_query(query: str, since: datetime, platform: str, hosts: tuple[str, ...], label: str, limit: int) -> tuple[list[RawItem], int]:
+def _social_query(query: str, since: datetime, platform: str, hosts: tuple[str, ...], label: str, limit: int, deadline: float | None = None) -> tuple[list[RawItem], int]:
     address = (
         "https://news.google.com/rss/search?q="
         + quote(f"{_exclude_owned_sites(query)} when:14d")
@@ -421,9 +468,11 @@ def _social_query(query: str, since: datetime, platform: str, hosts: tuple[str, 
     failed = 0
     tried = 0
     for item in raw_items:
+        if deadline is not None and time.monotonic() > deadline:
+            break
         if item.published_at < since or not _social_relevant(item):
             continue
-        if len(kept) >= limit or tried >= 8:
+        if len(kept) >= limit or tried >= 6:
             break
         tried += 1
         try:
@@ -450,7 +499,6 @@ def _social_query(query: str, since: datetime, platform: str, hosts: tuple[str, 
         if _owned(item):
             continue
         kept.append(item)
-        time.sleep(0.2)
     return kept, failed
 
 

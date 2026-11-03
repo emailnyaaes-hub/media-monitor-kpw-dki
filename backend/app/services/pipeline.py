@@ -32,9 +32,11 @@ CITIES = [
 ]
 
 
-def ingest(db: Session) -> dict:
+def ingest(db: Session, mode: str = "cepat") -> dict:
+    if mode not in {"cepat", "penuh"}:
+        mode = "cepat"
     if not ingest_lock.acquire(blocking=False):
-        return {"status": "sedang_berjalan", "added": 0, "skipped": 0, "rejected": 0, "invalid_url": 0, "alerts": 0}
+        return {"status": "sedang_berjalan", "mode": mode, "added": 0, "skipped": 0, "rejected": 0, "invalid_url": 0, "alerts": 0}
     started = now_wib()
     try:
         since = _since(db)
@@ -44,8 +46,8 @@ def ingest(db: Session) -> dict:
 
         rules = load_rules(db)
         db.commit()
-        log.info("Pengambilan mulai. Jendela sejak %s", since.isoformat(timespec="minutes"))
-        reports = collect_reports(since, rules)
+        log.info("Pengambilan %s mulai. Jendela sejak %s", mode, since.isoformat(timespec="minutes"))
+        reports = collect_reports(since, rules, mode=mode)
         added = skipped = rejected = invalid = 0
         summaries = []
         any_ok = False
@@ -58,10 +60,11 @@ def ingest(db: Session) -> dict:
             any_ok = any_ok or report.status == "berhasil"
             summaries.append(result["summary"])
             log.info("%s | %s | ditemukan %s | baru %s | %s", report.name, report.status, result["summary"]["found"], result["added"], report.message)
+        # Di mode cepat, lewati penyusunan saran yang lama agar respons tidak timeout.
         created = rebuild_issues(db) if any_ok or added else 0
         alerts = evaluate_rules(db) if any_ok or added else 0
         advice = {"created": 0, "updated": 0, "expired": 0}
-        if any_ok or added:
+        if mode == "penuh" and (any_ok or added):
             from app.services.dss import refresh_advices
 
             advice = refresh_advices(db)
@@ -69,9 +72,10 @@ def ingest(db: Session) -> dict:
             db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
             db.merge(AppMeta(key="data_mode", value="live"))
             db.commit()
-        log.info("Pengambilan selesai. baru=%s dilewati=%s ditolak=%s url_gagal=%s", added, skipped, rejected, invalid)
+        log.info("Pengambilan %s selesai. baru=%s dilewati=%s ditolak=%s url_gagal=%s", mode, added, skipped, rejected, invalid)
         return {
             "status": "selesai",
+            "mode": mode,
             "added": added,
             "skipped": skipped,
             "rejected": rejected,
@@ -80,6 +84,18 @@ def ingest(db: Session) -> dict:
             "issues": created,
             "advices": advice,
             "connectors": summaries,
+        }
+    except Exception as exc:
+        log.exception("Pengambilan gagal")
+        return {
+            "status": "gagal",
+            "mode": mode,
+            "added": 0,
+            "skipped": 0,
+            "rejected": 0,
+            "invalid_url": 0,
+            "alerts": 0,
+            "error": f"{exc.__class__.__name__}: {exc}",
         }
     finally:
         ingest_lock.release()

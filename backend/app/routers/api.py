@@ -1019,8 +1019,13 @@ def ingest_status(db: Session = Depends(get_db), _: CurrentUser = Depends(get_cu
 
 
 @router.post("/jobs/ingest")
-def job_ingest(db: Session = Depends(get_db), _: CurrentUser = Depends(require_admin)):
-    return ingest(db)
+def job_ingest(
+    mode: str = Query(default="cepat", pattern="^(cepat|penuh)$"),
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_admin),
+):
+    """mode=cepat: RSS langsung + GDELT (aman untuk tombol UI). mode=penuh: semua sumber."""
+    return ingest(db, mode=mode)
 
 
 @router.get("/cron/ingest")
@@ -1035,7 +1040,8 @@ def cron_ingest(request: Request, db: Session = Depends(get_db)):
         pass
     else:
         raise HTTPException(status_code=401, detail="Cron tidak diizinkan")
-    return ingest(db)
+    # Cron harian memakai mode penuh dengan batas waktu di dalam collect_reports.
+    return ingest(db, mode="penuh")
 
 
 @router.post("/jobs/retag")

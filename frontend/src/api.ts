@@ -25,7 +25,14 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   }
   if (!response.ok) {
     const body = await response.json().catch(() => ({}))
-    const detail = typeof body.detail === 'string' ? body.detail : 'Permintaan gagal'
+    const detail =
+      typeof body.detail === 'string'
+        ? body.detail
+        : response.status === 504 || response.status === 502
+          ? 'Server kehabisan waktu saat mengambil sumber. Coba lagi; mode cepat biasanya selesai di bawah satu menit.'
+          : response.status === 0
+            ? 'Koneksi terputus.'
+            : `Permintaan gagal (kode ${response.status}).`
     throw new ApiError(response.status, detail)
   }
   return response.json() as Promise<T>

@@ -324,14 +324,20 @@ function RefreshBar() {
   const autoTried = useRef(false)
   const data = status.data
   const stale = isStale(data?.last_updated || null) || Boolean(data?.needs_refresh)
-  const failed = data?.connectors.filter((item) => item.status !== 'berhasil') || []
+  const failed = data?.connectors.filter((item) => item.status === 'gagal') || []
 
   async function refresh(auto = false) {
     setBusy(true)
-    setNote(auto ? 'Memperbarui otomatis dari sumber media terpercaya…' : '')
+    setNote(auto ? 'Memperbarui otomatis dari RSS media terpercaya…' : 'Mengambil RSS Detik, Antara, CNN, Tempo, dan sumber langsung…')
     try {
-      const result = await api<{ status?: string; added?: number }>('/api/jobs/ingest', { method: 'POST' })
-      setNote(result.status === 'sedang_berjalan' ? 'Pembaruan lain masih berjalan.' : `Selesai. Item baru: ${result.added ?? 0}.`)
+      const result = await api<{ status?: string; added?: number; error?: string; mode?: string }>('/api/jobs/ingest?mode=cepat', { method: 'POST' })
+      if (result.status === 'gagal') {
+        setNote(result.error || 'Pembaruan gagal')
+      } else if (result.status === 'sedang_berjalan') {
+        setNote('Pembaruan lain masih berjalan.')
+      } else {
+        setNote(`Selesai (${result.mode || 'cepat'}). Item baru: ${result.added ?? 0}.`)
+      }
       status.reload()
     } catch (err) {
       setNote(err instanceof Error ? err.message : 'Pembaruan gagal')
