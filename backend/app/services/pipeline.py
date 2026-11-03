@@ -11,7 +11,6 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.connectors.live import FetchReport, collect_reports
-from app.database import SessionLocal
 from app.models import AppMeta, ConnectorRun, Keyword, Mention, SavedQuery
 from app.nlp import analyze
 from app.services.alerts import evaluate_rules
@@ -86,35 +85,19 @@ def ingest(db: Session) -> dict:
         ingest_lock.release()
 
 
-def maybe_auto_ingest(db: Session) -> bool:
-    """Mulai pengambilan di belakang layar bila data lebih dari 2 jam.
-
-    Dipakai di produksi Vercel karena proses penjadwal lokal dimatikan dan
-    paket Hobby hanya punya satu cron harian.
-    """
+def needs_refresh(db: Session) -> bool:
+    """True bila pembaruan terakhir lebih dari 2 jam atau belum pernah ada."""
     if ingest_lock.locked():
         return False
     last = db.get(AppMeta, "last_ingest_at")
     now = now_wib()
-    if last and last.value:
-        try:
-            previous = datetime.fromisoformat(last.value)
-        except ValueError:
-            previous = now - timedelta(days=3)
-        if now - previous < timedelta(hours=2):
-            return False
-    threading.Thread(target=_ingest_background, name="auto-ingest", daemon=True).start()
-    return True
-
-
-def _ingest_background() -> None:
-    db = SessionLocal()
+    if last is None or not last.value:
+        return True
     try:
-        ingest(db)
-    except Exception:
-        log.exception("Pengambilan otomatis gagal")
-    finally:
-        db.close()
+        previous = datetime.fromisoformat(last.value)
+    except ValueError:
+        return True
+    return now - previous >= timedelta(hours=2)
 
 
 def status_payload(db: Session) -> dict:
@@ -129,6 +112,7 @@ def status_payload(db: Session) -> dict:
         "last_updated": last.value if last else None,
         "next_update": next_run_wib(),
         "schedule": "setiap 2 jam",
+        "needs_refresh": needs_refresh(db),
         "running": ingest_lock.locked(),
         "timezone": "Asia/Jakarta",
         "connectors": [

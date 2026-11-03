@@ -311,8 +311,8 @@ interface IngestStatus {
   last_updated: string | null
   next_update: string | null
   schedule?: string
+  needs_refresh?: boolean
   running: boolean
-  auto_started?: boolean
   connectors: ConnectorStatus[]
 }
 
@@ -321,25 +321,14 @@ function RefreshBar() {
   const status = useApi<IngestStatus>('/api/ingest/status')
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
+  const autoTried = useRef(false)
   const data = status.data
-  const stale = isStale(data?.last_updated || null)
+  const stale = isStale(data?.last_updated || null) || Boolean(data?.needs_refresh)
   const failed = data?.connectors.filter((item) => item.status !== 'berhasil') || []
 
-  useEffect(() => {
-    if (!data?.auto_started) return
-    setNote('Pengambilan otomatis sedang berjalan dari sumber media terpercaya.')
-    const timer = window.setTimeout(() => status.reload(), 20000)
-    return () => window.clearTimeout(timer)
-  }, [data?.auto_started])
-
-  useEffect(() => {
-    const timer = window.setInterval(() => status.reload(), 2 * 60 * 60 * 1000)
-    return () => window.clearInterval(timer)
-  }, [])
-
-  async function refresh() {
+  async function refresh(auto = false) {
     setBusy(true)
-    setNote('')
+    setNote(auto ? 'Memperbarui otomatis dari sumber media terpercaya…' : '')
     try {
       const result = await api<{ status?: string; added?: number }>('/api/jobs/ingest', { method: 'POST' })
       setNote(result.status === 'sedang_berjalan' ? 'Pembaruan lain masih berjalan.' : `Selesai. Item baru: ${result.added ?? 0}.`)
@@ -350,6 +339,20 @@ function RefreshBar() {
       setBusy(false)
     }
   }
+
+  useEffect(() => {
+    if (user?.role !== 'admin' || !stale || busy || data?.running || autoTried.current || !data) return
+    autoTried.current = true
+    void refresh(true)
+  }, [user?.role, stale, busy, data?.running, data])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      autoTried.current = false
+      status.reload()
+    }, 2 * 60 * 60 * 1000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line px-4 py-2 text-sm text-muted">
@@ -380,7 +383,7 @@ function RefreshBar() {
         </ul>
       </details>
       {user?.role === 'admin' && (
-        <button className="no-briefing h-9 rounded-md bg-navy-900 px-2 text-white disabled:opacity-60" disabled={busy} onClick={refresh}>
+        <button className="no-briefing h-9 rounded-md bg-navy-900 px-2 text-white disabled:opacity-60" disabled={busy} onClick={() => void refresh(false)}>
           {busy ? 'Memperbarui...' : 'Perbarui sekarang'}
         </button>
       )}

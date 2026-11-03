@@ -41,7 +41,7 @@ from app.nlp.risk import score_risk
 from app.services import analytics
 from app.services.blocklist import apply_blocklist, external_only, load_rules
 from app.services.alerts import evaluate_rules
-from app.services.pipeline import ingest, maybe_auto_ingest, retag, status_payload
+from app.services.pipeline import ingest, retag, status_payload
 from app.services.reports import csv_mentions, html_report, narrative, pptx_report, workbook, xlsx_mentions
 from app.services.serialize import alert_out, issue_detail, loads, mention_card, mention_detail
 
@@ -1015,12 +1015,7 @@ def export_html(
 
 @router.get("/ingest/status")
 def ingest_status(db: Session = Depends(get_db), _: CurrentUser = Depends(get_current_user)):
-    started = maybe_auto_ingest(db)
-    payload = status_payload(db)
-    if started:
-        payload["running"] = True
-        payload["auto_started"] = True
-    return payload
+    return status_payload(db)
 
 
 @router.post("/jobs/ingest")
