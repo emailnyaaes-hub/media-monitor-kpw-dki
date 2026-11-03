@@ -46,12 +46,21 @@ def stop_scheduler() -> None:
 
 
 def next_run_wib() -> str | None:
-    if not scheduler.running:
-        return None
-    job = scheduler.get_job("refresh")
-    if job is None or job.next_run_time is None:
-        return None
-    return job.next_run_time.astimezone(WIB).replace(tzinfo=None).isoformat(timespec="minutes")
+    import os
+
+    if scheduler.running:
+        job = scheduler.get_job("refresh")
+        if job is not None and job.next_run_time is not None:
+            return job.next_run_time.astimezone(WIB).replace(tzinfo=None).isoformat(timespec="minutes")
+    # Di Vercel, penjadwal proses dimatikan. GitHub Actions memanggil /api/cron/ingest tiap 2 jam UTC.
+    if os.environ.get("VERCEL") == "1" or os.environ.get("VERCEL_ENV"):
+        now_utc = datetime.now(ZoneInfo("UTC")).replace(minute=0, second=0, microsecond=0)
+        hours = 2 - (now_utc.hour % 2)
+        if hours == 0:
+            hours = 2
+        nxt = now_utc + timedelta(hours=hours)
+        return nxt.astimezone(WIB).replace(tzinfo=None).isoformat(timespec="minutes")
+    return None
 
 
 def _run() -> None:

@@ -310,6 +310,7 @@ interface ConnectorStatus {
 interface IngestStatus {
   last_updated: string | null
   next_update: string | null
+  schedule?: string
   running: boolean
   connectors: ConnectorStatus[]
 }
@@ -340,7 +341,7 @@ function RefreshBar() {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line px-4 py-2 text-sm text-muted">
       <span>Terakhir diperbarui: {data?.last_updated ? `${formatWhen(data.last_updated)} WIB` : 'belum ada'}</span>
-      <span>Berikutnya: {data?.next_update ? `${formatWhen(data.next_update)} WIB` : 'menunggu penjadwal'}</span>
+      <span>Berikutnya: {data?.next_update ? `${formatWhen(data.next_update)} WIB` : 'menunggu penjadwal'}{data?.schedule ? ` · otomatis ${data.schedule}` : ''}</span>
       {stale && (
         <span className="inline-flex items-center gap-1 text-amber-800 dark:text-amber-200">
           <AlertTriangle size={14} aria-hidden />

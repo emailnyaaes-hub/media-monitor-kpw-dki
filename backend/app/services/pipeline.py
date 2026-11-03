@@ -96,6 +96,7 @@ def status_payload(db: Session) -> dict:
     return {
         "last_updated": last.value if last else None,
         "next_update": next_run_wib(),
+        "schedule": "setiap 2 jam",
         "running": ingest_lock.locked(),
         "timezone": "Asia/Jakarta",
         "connectors": [
