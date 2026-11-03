@@ -1040,8 +1040,8 @@ def cron_ingest(request: Request, db: Session = Depends(get_db)):
         pass
     else:
         raise HTTPException(status_code=401, detail="Cron tidak diizinkan")
-    # Cron harian memakai mode penuh dengan batas waktu di dalam collect_reports.
-    return ingest(db, mode="penuh")
+    # Cron harian memakai mode cepat (RSS langsung) agar tidak timeout di Vercel Hobby.
+    return ingest(db, mode="cepat")
 
 
 @router.post("/jobs/retag")
