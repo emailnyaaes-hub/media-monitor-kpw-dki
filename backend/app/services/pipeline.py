@@ -60,14 +60,18 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
             any_ok = any_ok or report.status == "berhasil"
             summaries.append(result["summary"])
             log.info("%s | %s | ditemukan %s | baru %s | %s", report.name, report.status, result["summary"]["found"], result["added"], report.message)
-        # Di mode cepat, lewati penyusunan saran yang lama agar respons tidak timeout.
-        created = rebuild_issues(db) if any_ok or added else 0
-        alerts = evaluate_rules(db) if any_ok or added else 0
+        # Mode cepat: simpan mention saja. Susunan isu/saran ditunda agar UI tidak timeout.
+        created = 0
+        alerts = 0
         advice = {"created": 0, "updated": 0, "expired": 0}
         if mode == "penuh" and (any_ok or added):
+            created = rebuild_issues(db)
+            alerts = evaluate_rules(db)
             from app.services.dss import refresh_advices
 
             advice = refresh_advices(db)
+        elif mode == "cepat" and added:
+            created = rebuild_issues(db)
         if any_ok:
             db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
             db.merge(AppMeta(key="data_mode", value="live"))

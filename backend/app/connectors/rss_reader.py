@@ -43,7 +43,7 @@ def parse_date(value: str | None) -> datetime | None:
 
 
 def read_rss(url: str, source_name: str, source_tier: int) -> list[RawItem]:
-    payload = fetch_bytes(url)
+    payload = fetch_bytes(url, timeout=10, attempts=1)
     root = ElementTree.fromstring(payload)
     items: list[RawItem] = []
     for node in root.findall(".//item"):
@@ -78,7 +78,7 @@ YT = "http://www.youtube.com/xml/schemas/2015"
 
 def read_atom(url: str, source_tier: int, platform: str, handle: str = "") -> list[RawItem]:
     """Membaca feed Atom publik, termasuk feed kanal YouTube."""
-    root = ElementTree.fromstring(fetch_bytes(url))
+    root = ElementTree.fromstring(fetch_bytes(url, timeout=10, attempts=1))
     items: list[RawItem] = []
     for node in root.findall(f"{{{ATOM}}}entry"):
         title = strip_snippet(node.findtext(f"{{{ATOM}}}title") or "", 240)

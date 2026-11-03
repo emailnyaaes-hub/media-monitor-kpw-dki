@@ -12,7 +12,7 @@ USER_AGENT = (
 )
 
 
-def fetch_bytes(url: str, *, timeout: int = 20, attempts: int = 3, data: bytes | None = None, headers: dict | None = None) -> bytes:
+def fetch_bytes(url: str, *, timeout: int = 12, attempts: int = 2, data: bytes | None = None, headers: dict | None = None) -> bytes:
     last_error: Exception | None = None
     for attempt in range(attempts):
         try:

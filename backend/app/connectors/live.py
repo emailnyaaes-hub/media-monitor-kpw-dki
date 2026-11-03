@@ -61,7 +61,7 @@ class FetchReport:
 def collect_reports(since: datetime, rules: list | None = None, mode: str = "penuh") -> list[FetchReport]:
     """Ambil laporan sumber.
 
-    mode=cepat: hanya RSS langsung + GDELT (untuk tombol Perbarui, selesai dalam ~1 menit).
+    mode=cepat: hanya RSS langsung (tombol Perbarui, target di bawah 1 menit).
     mode=penuh: semua sumber, dengan batas waktu agar tidak menggantung di Vercel.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -69,7 +69,7 @@ def collect_reports(since: datetime, rules: list | None = None, mode: str = "pen
     global _active_rules
     _active_rules = list(rules or [])
     started = time.monotonic()
-    budget = 50 if mode == "cepat" else 220
+    budget = 35 if mode == "cepat" else 180
     try:
         reports: list[FetchReport] = []
         with ThreadPoolExecutor(max_workers=6) as pool:
@@ -90,11 +90,12 @@ def collect_reports(since: datetime, rules: list | None = None, mode: str = "pen
                         continue
                     future.cancel()
                     reports.append(FetchReport(name, "gagal", "Sumber tidak tersedia. Batas waktu pengambilan habis."))
-        if time.monotonic() - started < budget:
-            reports.append(fetch_gdelt(since))
         if mode == "cepat":
+            # Mode cepat: hanya RSS langsung. GDELT/Google ditunda agar tombol UI tidak timeout.
             reports.extend(unavailable_social())
             return reports
+        if time.monotonic() - started < budget:
+            reports.append(fetch_gdelt(since))
         remaining = lambda: budget - (time.monotonic() - started)
         if remaining() > 40:
             reports.append(fetch_google_news(since, deadline=started + budget - 10))
