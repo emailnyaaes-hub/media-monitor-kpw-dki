@@ -32,6 +32,33 @@ CITIES = [
 ]
 
 
+def start_ingest(mode: str = "cepat") -> dict:
+    """Mulai pengambilan di thread terpisah agar request HTTP tidak digantung Vercel."""
+    if mode not in {"cepat", "penuh"}:
+        mode = "cepat"
+    if ingest_lock.locked():
+        return {"status": "sedang_berjalan", "mode": mode, "added": 0, "message": "Pengambilan lain masih berjalan."}
+
+    def runner() -> None:
+        from app.database import SessionLocal
+
+        db = SessionLocal()
+        try:
+            ingest(db, mode=mode)
+        except Exception:
+            log.exception("Pengambilan latar gagal")
+        finally:
+            db.close()
+
+    threading.Thread(target=runner, name=f"ingest-{mode}", daemon=True).start()
+    return {
+        "status": "dimulai",
+        "mode": mode,
+        "added": 0,
+        "message": "Pengambilan dimulai. Status akan berubah setelah sumber selesai dibaca.",
+    }
+
+
 def ingest(db: Session, mode: str = "cepat") -> dict:
     if mode not in {"cepat", "penuh"}:
         mode = "cepat"

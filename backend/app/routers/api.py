@@ -41,7 +41,7 @@ from app.nlp.risk import score_risk
 from app.services import analytics
 from app.services.blocklist import apply_blocklist, external_only, load_rules
 from app.services.alerts import evaluate_rules
-from app.services.pipeline import ingest, retag, status_payload
+from app.services.pipeline import ingest, retag, start_ingest, status_payload
 from app.services.reports import csv_mentions, html_report, narrative, pptx_report, workbook, xlsx_mentions
 from app.services.serialize import alert_out, issue_detail, loads, mention_card, mention_detail
 
@@ -1021,11 +1021,14 @@ def ingest_status(db: Session = Depends(get_db), _: CurrentUser = Depends(get_cu
 @router.post("/jobs/ingest")
 def job_ingest(
     mode: str = Query(default="cepat", pattern="^(cepat|penuh)$"),
+    wait: bool = Query(default=False),
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(require_admin),
 ):
-    """mode=cepat: RSS langsung + GDELT (aman untuk tombol UI). mode=penuh: semua sumber."""
-    return ingest(db, mode=mode)
+    """mode=cepat: RSS langsung. Default: mulai di latar agar tombol UI tidak timeout."""
+    if wait:
+        return ingest(db, mode=mode)
+    return start_ingest(mode)
 
 
 @router.get("/cron/ingest")
@@ -1040,8 +1043,8 @@ def cron_ingest(request: Request, db: Session = Depends(get_db)):
         pass
     else:
         raise HTTPException(status_code=401, detail="Cron tidak diizinkan")
-    # Cron harian memakai mode cepat (RSS langsung) agar tidak timeout di Vercel Hobby.
-    return ingest(db, mode="cepat")
+    # Mulai di latar: respons cepat, proses lanjut di container yang tetap hidup.
+    return start_ingest("cepat")
 
 
 @router.post("/jobs/retag")

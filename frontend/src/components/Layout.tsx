@@ -330,15 +330,31 @@ function RefreshBar() {
     setBusy(true)
     setNote(auto ? 'Memperbarui otomatis dari RSS media terpercaya…' : 'Mengambil RSS Detik, Antara, CNN, Tempo, dan sumber langsung…')
     try {
-      const result = await api<{ status?: string; added?: number; error?: string; mode?: string }>('/api/jobs/ingest?mode=cepat', { method: 'POST' })
+      const result = await api<{ status?: string; added?: number; error?: string; mode?: string; message?: string }>('/api/jobs/ingest?mode=cepat', { method: 'POST' })
       if (result.status === 'gagal') {
         setNote(result.error || 'Pembaruan gagal')
-      } else if (result.status === 'sedang_berjalan') {
-        setNote('Pembaruan lain masih berjalan.')
-      } else {
-        setNote(`Selesai (${result.mode || 'cepat'}). Item baru: ${result.added ?? 0}.`)
+        setBusy(false)
+        return
       }
-      status.reload()
+      if (result.status === 'selesai') {
+        setNote(`Selesai (${result.mode || 'cepat'}). Item baru: ${result.added ?? 0}.`)
+        setBusy(false)
+        status.reload()
+        return
+      }
+      setNote(result.status === 'sedang_berjalan' ? 'Pembaruan lain masih berjalan. Menunggu…' : 'Pengambilan dimulai. Menunggu sumber selesai…')
+      for (let i = 0; i < 24; i += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 4000))
+        status.reload()
+        const latest = await api<IngestStatus>('/api/ingest/status')
+        if (!latest.running) {
+          setNote(`Selesai. Terakhir diperbarui: ${latest.last_updated ? formatWhen(latest.last_updated) + ' WIB' : 'baru saja'}.`)
+          setBusy(false)
+          status.reload()
+          return
+        }
+      }
+      setNote('Pengambilan masih berjalan di server. Periksa lagi dalam satu menit.')
     } catch (err) {
       setNote(err instanceof Error ? err.message : 'Pembaruan gagal')
     } finally {
