@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.connectors.live import FetchReport, collect_reports
+from app.database import SessionLocal
 from app.models import AppMeta, ConnectorRun, Keyword, Mention, SavedQuery
 from app.nlp import analyze
 from app.services.alerts import evaluate_rules
@@ -83,6 +84,37 @@ def ingest(db: Session) -> dict:
         }
     finally:
         ingest_lock.release()
+
+
+def maybe_auto_ingest(db: Session) -> bool:
+    """Mulai pengambilan di belakang layar bila data lebih dari 2 jam.
+
+    Dipakai di produksi Vercel karena proses penjadwal lokal dimatikan dan
+    paket Hobby hanya punya satu cron harian.
+    """
+    if ingest_lock.locked():
+        return False
+    last = db.get(AppMeta, "last_ingest_at")
+    now = now_wib()
+    if last and last.value:
+        try:
+            previous = datetime.fromisoformat(last.value)
+        except ValueError:
+            previous = now - timedelta(days=3)
+        if now - previous < timedelta(hours=2):
+            return False
+    threading.Thread(target=_ingest_background, name="auto-ingest", daemon=True).start()
+    return True
+
+
+def _ingest_background() -> None:
+    db = SessionLocal()
+    try:
+        ingest(db)
+    except Exception:
+        log.exception("Pengambilan otomatis gagal")
+    finally:
+        db.close()
 
 
 def status_payload(db: Session) -> dict:

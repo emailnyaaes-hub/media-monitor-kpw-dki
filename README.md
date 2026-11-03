@@ -74,7 +74,7 @@ Filter tanggal, platform, dan kategori di bagian atas berlaku di semua halaman.
 
 ## Sumber data
 
-Salin `backend/.env.example` menjadi `backend/.env` bila ada kunci API. `LLM_API_KEY` opsional: tanpa kunci, Executive Summary dan Review Konten tetap jalan dengan aturan yang hanya memakai teks tersimpan atau pola kata. Di komputer lokal, penjadwal mengambil data baru setiap 2 jam. Di produksi, GitHub Actions memanggil `/api/cron/ingest` setiap 2 jam (paket Vercel Hobby hanya mengizinkan satu cron harian sebagai cadangan). Isi `CRON_SECRET` di Vercel dan di GitHub Secrets. Admin dapat menekan **Perbarui sekarang**.
+Salin `backend/.env.example` menjadi `backend/.env` bila ada kunci API. `LLM_API_KEY` opsional: tanpa kunci, Executive Summary dan Review Konten tetap jalan dengan aturan yang hanya memakai teks tersimpan atau pola kata. Di komputer lokal, penjadwal mengambil data baru setiap 2 jam. Di produksi Vercel Hobby hanya mengizinkan satu cron harian (cadangan pukul 08.00 WIB). Agar tetap segar tiap 2 jam, saat admin membuka dashboard dan data lebih dari 2 jam, server otomatis menarik ulang RSS media terpercaya di belakang layar. File `.github/workflows/ingest.yml` siap dipakai bila akun GitHub punya izin `workflow`. Admin juga dapat menekan **Perbarui sekarang**.
 
 Yang dipakai tanpa kunci:
 

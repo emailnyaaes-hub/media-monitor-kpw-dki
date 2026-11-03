@@ -312,6 +312,7 @@ interface IngestStatus {
   next_update: string | null
   schedule?: string
   running: boolean
+  auto_started?: boolean
   connectors: ConnectorStatus[]
 }
 
@@ -323,6 +324,18 @@ function RefreshBar() {
   const data = status.data
   const stale = isStale(data?.last_updated || null)
   const failed = data?.connectors.filter((item) => item.status !== 'berhasil') || []
+
+  useEffect(() => {
+    if (!data?.auto_started) return
+    setNote('Pengambilan otomatis sedang berjalan dari sumber media terpercaya.')
+    const timer = window.setTimeout(() => status.reload(), 20000)
+    return () => window.clearTimeout(timer)
+  }, [data?.auto_started])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => status.reload(), 2 * 60 * 60 * 1000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   async function refresh() {
     setBusy(true)
