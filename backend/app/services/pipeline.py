@@ -21,6 +21,7 @@ from app.services.urls import canonical_url, is_public_article
 
 log = logging.getLogger("bi.ingest")
 ingest_lock = threading.Lock()
+INGEST_STALE_MINUTES = 6
 
 CITIES = [
     "Kepulauan Seribu",
@@ -59,12 +60,41 @@ def start_ingest(mode: str = "cepat") -> dict:
     }
 
 
+def _set_running(db: Session, active: bool) -> None:
+    db.merge(AppMeta(key="ingest_running_since", value=now_wib().isoformat(timespec="minutes") if active else ""))
+    db.commit()
+
+
+def _running_stale(db: Session) -> bool:
+    row = db.get(AppMeta, "ingest_running_since")
+    if row is None or not (row.value or "").strip():
+        return False
+    try:
+        since = datetime.fromisoformat(row.value)
+    except ValueError:
+        return True
+    return now_wib() - since > timedelta(minutes=INGEST_STALE_MINUTES)
+
+
+def ingest_running(db: Session) -> bool:
+    if _running_stale(db):
+        _set_running(db, False)
+        return False
+    row = db.get(AppMeta, "ingest_running_since")
+    return bool(row and (row.value or "").strip())
+
+
 def ingest(db: Session, mode: str = "cepat") -> dict:
     if mode not in {"cepat", "penuh"}:
         mode = "cepat"
+    if ingest_running(db) and not _running_stale(db):
+        return {"status": "sedang_berjalan", "mode": mode, "added": 0, "skipped": 0, "rejected": 0, "invalid_url": 0, "alerts": 0}
+    if _running_stale(db):
+        _set_running(db, False)
     if not ingest_lock.acquire(blocking=False):
         return {"status": "sedang_berjalan", "mode": mode, "added": 0, "skipped": 0, "rejected": 0, "invalid_url": 0, "alerts": 0}
     started = now_wib()
+    _set_running(db, True)
     try:
         since = _since(db)
         keywords = db.query(Keyword).all()
@@ -79,6 +109,11 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
         summaries = []
         any_ok = False
         for report in reports:
+            if report.status == "tidak_tersedia":
+                summaries.append(
+                    {"name": report.name, "status": report.status, "found": 0, "added": 0, "message": report.message[:300]}
+                )
+                continue
             result = _store_report(db, report, keywords, queries, rules, started)
             added += result["added"]
             skipped += result["skipped"]
@@ -99,14 +134,10 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
             advice = refresh_advices(db)
         elif mode == "cepat" and added:
             created = rebuild_issues(db)
-        if any_ok:
-            db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
+        db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
+        if any_ok or added:
             db.merge(AppMeta(key="data_mode", value="live"))
-            db.commit()
-        elif added:
-            # Ada mention baru walau satu RSS gagal; tetap catat waktu agar UI tidak stuck.
-            db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
-            db.commit()
+        db.commit()
         log.info("Pengambilan %s selesai. baru=%s dilewati=%s ditolak=%s url_gagal=%s", mode, added, skipped, rejected, invalid)
         return {
             "status": "selesai",
@@ -133,12 +164,16 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
             "error": f"{exc.__class__.__name__}: {exc}",
         }
     finally:
+        try:
+            _set_running(db, False)
+        except Exception:
+            log.exception("Gagal mengosongkan penanda pengambilan")
         ingest_lock.release()
 
 
 def needs_refresh(db: Session) -> bool:
     """True bila pembaruan terakhir lebih dari 2 jam atau belum pernah ada."""
-    if ingest_lock.locked():
+    if ingest_running(db):
         return False
     last = db.get(AppMeta, "last_ingest_at")
     now = now_wib()
@@ -167,12 +202,26 @@ def status_payload(db: Session) -> dict:
     latest: dict[str, ConnectorRun] = {}
     for row in rows:
         latest.setdefault(row.connector, row)
+    cutoff = None
+    if last and last.value:
+        try:
+            cutoff = datetime.fromisoformat(last.value) - timedelta(hours=2)
+        except ValueError:
+            cutoff = None
+    connector_rows = list(latest.values())
+    if cutoff is not None:
+        connector_rows = [row for row in connector_rows if row.finished_at >= cutoff]
+    connector_rows = [
+        row
+        for row in connector_rows
+        if row.connector not in {"Threads API"} and row.status != "tidak_tersedia"
+    ]
     return {
         "last_updated": last.value if last else None,
         "next_update": next_run_wib(),
         "schedule": schedule,
         "needs_refresh": needs_refresh(db),
-        "running": ingest_lock.locked(),
+        "running": ingest_running(db),
         "timezone": "Asia/Jakarta",
         "connectors": [
             {
@@ -183,7 +232,7 @@ def status_payload(db: Session) -> dict:
                 "added": row.added,
                 "finished_at": row.finished_at.isoformat(timespec="minutes"),
             }
-            for row in latest.values()
+            for row in connector_rows
         ],
     }
 

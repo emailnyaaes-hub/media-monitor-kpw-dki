@@ -91,8 +91,7 @@ def collect_reports(since: datetime, rules: list | None = None, mode: str = "pen
                     future.cancel()
                     reports.append(FetchReport(name, "gagal", "Sumber tidak tersedia. Batas waktu pengambilan habis."))
         if mode == "cepat":
-            # Mode cepat: hanya RSS langsung. GDELT/Google ditunda agar tombol UI tidak timeout.
-            reports.extend(unavailable_social())
+            # Mode cepat: hanya RSS langsung (tanpa placeholder Threads/API sosial agar status tidak palsu).
             return reports
         if time.monotonic() - started < budget:
             reports.append(fetch_gdelt(since))

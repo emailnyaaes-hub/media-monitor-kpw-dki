@@ -324,7 +324,7 @@ function RefreshBar() {
   const autoTried = useRef(false)
   const data = status.data
   const stale = isStale(data?.last_updated || null) || Boolean(data?.needs_refresh)
-  const failed = data?.connectors.filter((item) => item.status === 'gagal') || []
+  const failed = data?.connectors.filter((item) => item.status === 'gagal' || item.status === 'timeout') || []
 
   async function refresh(auto = false) {
     setBusy(true)
@@ -399,7 +399,9 @@ function RefreshBar() {
               {' · '}
               {item.status === 'berhasil'
                 ? `berhasil, item baru ${item.added}`
-                : `Sumber ${item.name} gagal diperbarui ${formatWhen(item.finished_at)} WIB. Data lama tetap ditampilkan.`}
+                : item.status === 'tidak_tersedia'
+                  ? `${item.name}: dilewati (belum diintegrasikan).`
+                  : `Sumber ${item.name} gagal diperbarui ${formatWhen(item.finished_at)} WIB. Data lama tetap ditampilkan.`}
             </li>
           ))}
           {!data?.connectors.length && <li>Status sumber belum ada.</li>}
