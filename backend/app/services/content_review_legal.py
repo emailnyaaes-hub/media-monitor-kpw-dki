@@ -180,6 +180,30 @@ IMPLIKASI_SUBSTANSI = [
         "Anjuran peniruan merek dapat dikenai sanksi pidana dan perdata serta merusak citra kelembagaan.",
     ),
     (
+        re.compile(
+            r"\b(KTP|NIK)\b[\s\S]{0,160}\b(bukan|tidak)\s+(merupakan\s+)?data\s+pribadi\b"
+            r"|"
+            r"\b(bukan|tidak)\s+(merupakan\s+)?data\s+pribadi\b[\s\S]{0,160}\b(KTP|NIK)\b",
+            re.I | re.S,
+        ),
+        "Tinggi",
+        "Substansi menyangkal status KTP/NIK sebagai data pribadi.",
+        "UU No. 27 Tahun 2022 tentang Pelindungan Data Pribadi. Perlu verifikasi tim Hukum.",
+        "Kami mengimbau bahwa KTP/NIK merupakan data pribadi; edukasi pemberian salinan hanya dengan dasar hukum yang sah.",
+        "Menyatakan KTP bukan data pribadi menyesatkan publik dan bertentangan UU PDP.",
+    ),
+    (
+        re.compile(
+            r"\b(mengimbau|menyarankan)\b[\s\S]{0,200}\b(KTP|NIK)\b[\s\S]{0,120}\b(diberikan|diserahkan)\b",
+            re.I | re.S,
+        ),
+        "Tinggi",
+        "Substansi menganjurkan penyerahan KTP/NIK tanpa perlindungan data.",
+        "UU No. 27 Tahun 2022 tentang Pelindungan Data Pribadi. Perlu verifikasi tim Hukum.",
+        "Tinjau dasar hukum dan batasi tujuan pemrosesan sebelum meminta salinan KTP/NIK.",
+        "Anjuran menyerahkan identitas tanpa konteks hukum berisiko penyalahgunaan data.",
+    ),
+    (
         re.compile(r"\bmenyalahi\s+indikasi\s+geografis\b|\bmemalsukan\s+indikasi\s+geografis\b", re.I),
         "Tinggi",
         "Draf menyentuh pelanggaran indikasi geografis.",

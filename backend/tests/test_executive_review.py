@@ -94,10 +94,25 @@ class ReviewTests(unittest.TestCase):
                 "",
             )
         text = " ".join(item["masalah"] for item in result["findings"])
-        self.assertIn("review-rules-5", result["method"])
+        self.assertIn("review-rules-6", result["method"])
         self.assertIn("uu-corpus", result["method"])
         self.assertTrue(any(item.get("tambah") for item in result["findings"]))
         self.assertTrue("inflasi" in result["revised"].lower() or any("inflasa" in (item.get("hapus") or "") for item in result["findings"]))
+
+    def test_ktp_bukan_data_pribadi(self):
+        with mock.patch.dict(os.environ, {"LLM_API_KEY": ""}):
+            result = review(
+                "Hi Warga Jakarta,\n"
+                "Kami mengimbau bahwa KTP bukan merupakan data pribadi sehingga apabila terdapat pihak yang "
+                "meminta KTP anda, mohon untuk kapat diberikan.",
+                "siaran",
+                "",
+            )
+        blob = " ".join(item["masalah"] + item.get("dasar_hukum", "") for item in result["findings"]).lower()
+        self.assertIn("ktp", blob)
+        self.assertIn("data pribadi", blob)
+        self.assertGreaterEqual(result["counts"].get("implikasi_hukum", 0), 1)
+        self.assertEqual(result["status"], "Berisiko Tinggi")
 
     def test_merek_duplikasi_and_typo_sample(self):
         with mock.patch.dict(os.environ, {"LLM_API_KEY": ""}):

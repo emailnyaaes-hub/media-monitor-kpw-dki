@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Callable
 
 _CATALOG_PATH = Path(__file__).resolve().parent.parent / "data" / "uu_review_catalog.json"
-_CATALOG_VERSION = "uu-corpus-1"
+_CATALOG_VERSION = "uu-corpus-2"
 
 # Implikasi operasional per UU (diselaraskan dengan PDF yang diunggah pengguna).
 CORPUS_IMPLIKASI = [
@@ -60,6 +60,46 @@ CORPUS_IMPLIKASI = [
         "masalah": "Draf dapat menormalkan penyimpanan atau penyebaran data pribadi tanpa dasar hukum.",
         "saran": "Hapus data pribadi contoh nyata; gunakan ilustrasi dan rujuk kebijakan privasi resmi.",
         "alasan": "UU No. 27 Tahun 2022 mensyaratkan dasar dan persetujuan pemrosesan data pribadi.",
+        "revisi_kalimat": False,
+    },
+    {
+        "uu": (27, 2022),
+        "pola": re.compile(
+            r"\b(KTP|NIK|kartu tanda penduduk)\b[\s\S]{0,160}\b(bukan|tidak)\s+(merupakan\s+)?data\s+pribadi\b"
+            r"|"
+            r"\b(bukan|tidak)\s+(merupakan\s+)?data\s+pribadi\b[\s\S]{0,160}\b(KTP|NIK|kartu tanda penduduk)\b",
+            re.I | re.S,
+        ),
+        "risiko": "Tinggi",
+        "masalah": "Draf menyatakan KTP/NIK bukan data pribadi — informasi menyesatkan dan berisiko pelanggaran UU PDP.",
+        "saran": (
+            "Kami mengimbau bahwa KTP/NIK merupakan data pribadi. Berikan salinan KTP hanya bila ada dasar hukum "
+            "yang jelas, tujuan terbatas, dan perlindungan yang memadai. Bila ragu, konsultasikan dengan pihak yang "
+            "berwenang atau tolak dengan sopan."
+        ),
+        "alasan": "UU No. 27 Tahun 2022 melindungi data pribadi, termasuk data yang dapat mengidentifikasi seseorang.",
+        "revisi_kalimat": True,
+    },
+    {
+        "uu": (27, 2022),
+        "pola": re.compile(
+            r"\bmeminta\b[\s\S]{0,120}\b(KTP|NIK)\b[\s\S]{0,120}\b(mohon|agar|silakan).{0,60}\b(diberikan|diserahkan)\b"
+            r"|"
+            r"\bmohon\b.{0,80}\b(KTP|NIK)\b.{0,80}\b(diberikan|diserahkan|kapat)\b"
+            r"|"
+            r"\b(KTP|NIK)\b[\s\S]{0,100}\b(dapat|boleh|kapat)\s+diberikan\b"
+            r"|"
+            r"\b(dapat|boleh|kapat)\s+diberikan\b[\s\S]{0,50}\b(KTP|NIK)\b",
+            re.I | re.S,
+        ),
+        "risiko": "Tinggi",
+        "masalah": "Draf mengimbau publik menyerahkan KTP/NIK tanpa penekanan dasar hukum dan perlindungan data.",
+        "saran": (
+            "Kami mengimbau untuk berhati-hati memberikan salinan KTP/NIK. Pastikan ada dasar hukum, persetujuan "
+            "yang sah, dan perlindungan data. Jangan pernyatakan KTP bukan data pribadi."
+        ),
+        "alasan": "Penyerahan KTP sembarangan berisiko penyalahgunaan identitas dan pelanggaran UU PDP.",
+        "revisi_kalimat": True,
     },
     {
         "uu": (23, 1999),
@@ -166,10 +206,17 @@ def analyze_corpus(text: str, make_finding: Callable[..., dict]) -> list[dict]:
     for rule in CORPUS_IMPLIKASI:
         num, year = rule["uu"]
         legal = f"{uu_label(num, year)}. Perlu verifikasi tim Hukum."
+        seen_sentence: set[str] = set()
         for match in rule["pola"].finditer(text):
             span_start, span_end = match.start(), match.end()
             s_start, s_end = _sentence_bounds(text, span_start)
             sentence = text[s_start:s_end].strip()
+            if sentence in seen_sentence and rule.get("revisi_kalimat"):
+                continue
+            seen_sentence.add(sentence)
+            revisi = bool(rule.get("revisi_kalimat"))
+            hapus = sentence if revisi else text[span_start:span_end]
+            tambah = rule["saran"] if revisi else None
             findings.append(
                 make_finding(
                     s_start,
@@ -181,10 +228,10 @@ def analyze_corpus(text: str, make_finding: Callable[..., dict]) -> list[dict]:
                     legal,
                     rule["saran"],
                     rule["alasan"],
-                    span_start=span_start,
-                    span_end=span_end,
-                    hapus=text[span_start:span_end],
-                    tambah=None,
+                    span_start=s_start if revisi else span_start,
+                    span_end=s_end if revisi else span_end,
+                    hapus=hapus,
+                    tambah=tambah,
                 )
             )
     return findings

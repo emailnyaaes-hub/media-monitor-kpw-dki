@@ -23,7 +23,7 @@ DISCLAIMER = (
     "Hasil review adalah alat bantu AI dan tidak menggantikan review resmi "
     "oleh Unit Hukum/Kepatuhan."
 )
-REVIEW_RULES_VERSION = "review-rules-5"
+REVIEW_RULES_VERSION = "review-rules-6"
 
 UU_EXPECTED_YEAR = {
     4: 2023,
@@ -211,6 +211,18 @@ RULES = [
         "Salah ketik pada istilah hukum mengurangi kredibilitas naskah.",
     ),
     (
+        re.compile(
+            r"\b(KTP|NIK)\b.{0,100}\b(bukan|tidak)\s+(merupakan\s+)?data\s+pribadi\b",
+            re.I | re.S,
+        ),
+        "implikasi_hukum",
+        "Tinggi",
+        "Menyatakan KTP/NIK bukan data pribadi.",
+        "UU No. 27 Tahun 2022 tentang Pelindungan Data Pribadi. Perlu verifikasi tim Hukum.",
+        "Ganti pernyataan: KTP/NIK adalah data pribadi; berikan salinan hanya dengan dasar hukum dan perlindungan memadai.",
+        "Informasi ini keliru dan dapat melanggar kewajiban pelindungan data pribadi.",
+    ),
+    (
         re.compile(r"\bsebesar-besarnya\b", re.I),
         "regulasi",
         "Sedang",
@@ -252,6 +264,8 @@ KATA_BAKU_RULES = [
     (re.compile(r"\bdi\s+atur\b", re.I), "diatur", "Kata majemuk 'di-' + 'atur' ditulis serangkai sebagai diatur."),
     (re.compile(r"\bdi\s+atasnamakan\b", re.I), "mengatasnamakan", "Ejaan baku: mengatasnamakan."),
     (re.compile(r"\bmenghasilkaq\b", re.I), "menghasilkan", "Salah ketik: huruf «q» seharusnya «n»."),
+    (re.compile(r"\bkapat\b", re.I), "dapat", "Salah ketik: «kapat» seharusnya «dapat»."),
+    (re.compile(r"\b(?<![a-z])anda(?![a-z])\b", re.I), "Anda", "Ragam hormat: «Anda» untuk publik."),
     (re.compile(r"\bprofit\b", re.I), "keuntungan", "Ragam resmi memakai «keuntungan»."),
 ]
 
@@ -259,7 +273,7 @@ TYPO_Q_PATTERN = re.compile(r"\b([a-z]{4,})kaq\b", re.I)
 
 INFORMAL_RULES = [
     (
-        re.compile(r"\bHi\s+Warga(?:\s+DKI\s+Jakarta)?,?", re.I),
+        re.compile(r"\bHi\s+Warga(?:\s+Jakarta)?(?:\s+DKI)?(?:\s+Jakarta)?,?", re.I),
         "Salam «Hi Warga» terlalu santai untuk kanal resmi BI/KPw.",
         "Yth. Warga Jakarta,",
     ),
