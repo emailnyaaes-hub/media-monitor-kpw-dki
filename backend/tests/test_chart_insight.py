@@ -50,8 +50,8 @@ class ChartInsightTests(unittest.TestCase):
         with patched(sample(2), []):
             result = chart_insight.generate(None, WINDOW, "komposisi")
         self.assertTrue(result["insufficient"])
-        self.assertEqual(result["so_what"], chart_insight.THIN)
-        self.assertEqual(result["now_what"], chart_insight.THIN)
+        self.assertIn(chart_insight.THIN, result["so_what"])
+        self.assertIn(chart_insight.THIN, result["now_what"])
         self.assertEqual(result["keyakinan"], "Rendah")
 
     def test_negative_composition_reads_threshold_and_links(self):
@@ -64,7 +64,8 @@ class ChartInsightTests(unittest.TestCase):
         self.assertIn("pimpinan", result["now_what"])
         self.assertTrue(result["evidence"])
         self.assertTrue(all(item["url"].startswith("https://") for item in result["evidence"]))
-        self.assertEqual(result["method"], "Aturan dari data grafik")
+        self.assertIn("insight-bi-1", result["method"])
+        self.assertIn("Bank Indonesia", result["what_happened"])
 
     def test_trend_without_previous_period_says_so(self):
         with patched(sample(12), []), mock.patch.dict(os.environ, {"LLM_API_KEY": ""}):

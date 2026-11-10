@@ -13,6 +13,7 @@ interface Insight {
   insufficient: boolean
   evidence: Evidence[]
   method: string
+  insight_version?: string
 }
 
 const CONFIDENCE_CLASS: Record<string, string> = {
@@ -24,9 +25,9 @@ const CONFIDENCE_CLASS: Record<string, string> = {
 const STAGES: [number, string][] = [
   [0, 'Mengambil data grafik…'],
   [12, 'Membaca pola volume dan sentimen…'],
-  [35, 'Menyusun What happened…'],
-  [58, 'Menyusun So what…'],
-  [78, 'Menyusun Now what…'],
+  [35, 'Menyusun What happened (ragam BI)…'],
+  [58, 'Menyusun So what dan dampak persepsi…'],
+  [78, 'Menyusun Now what dan langkah implementasi…'],
 ]
 
 export default function ChartInsight({ chart, granularity = 'day', extraQuery = '', className = '' }: { chart: 'trend' | 'komposisi' | 'volume' | 'kata' | 'suara'; granularity?: string; extraQuery?: string; className?: string }) {
@@ -95,7 +96,10 @@ export default function ChartInsight({ chart, granularity = 'day', extraQuery = 
             <p className="text-xs font-bold uppercase tracking-wide text-muted">Bukti</p>
             <div className="mt-1"><EvidenceList items={data.evidence} limit={3} /></div>
           </div>
-          <p className="text-xs text-muted">Metode: {data.method}. Wajib diverifikasi manusia sebelum dipakai.</p>
+          <p className="text-xs text-muted">
+            Metode: {data.method}
+            {data.insight_version ? ` · ${data.insight_version}` : ''}. Wajib diverifikasi manusia sebelum dipakai.
+          </p>
         </div>
       )}
     </div>
@@ -109,7 +113,7 @@ function Section({ title, badge, children }: { title: string; badge?: string; ch
         {title}
         {badge && <span className="rounded-sm border border-line px-1 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-muted">{badge}</span>}
       </p>
-      <p className="mt-0.5 leading-relaxed">{children}</p>
+      <p className="mt-0.5 whitespace-pre-wrap leading-relaxed">{children}</p>
     </div>
   )
 }

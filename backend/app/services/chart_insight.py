@@ -32,8 +32,12 @@ CHARTS = {
 }
 GRAIN_LABEL = {"day": "harian", "week": "mingguan", "month": "bulanan"}
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
-THIN = "Data belum cukup, perlu verifikasi."
+THIN = (
+    "Data belum memadai untuk simpulan operasional. "
+    "Bank Indonesia/KPw BI DKI Jakarta disarankan menunda rekomendasi hingga ambang sumber terpenuhi."
+)
 WATCH_NEGATIVE = 25.0
+INSIGHT_VERSION = "insight-bi-1"
 
 SYSTEM_PROMPT = f"""Anda membantu tim Kehumasan/KPw BI membaca satu grafik dashboard media monitor.
 Tulis komprehensif dan actionable untuk rapat pantauan, ragam bahasa Bank Indonesia.
@@ -139,16 +143,20 @@ def _trend(db: Session, window: dict, grain: str) -> dict:
     else:
         what += " Periode sebelumnya belum punya data, jadi perbandingan belum bisa dihitung."
 
+    critical = peak_neg >= 40
     if peak_neg >= 40:
-        so = f"Puncak pada {_day(peak['date'], grain)} didorong nada negatif, terutama kategori {peak_cat}. Kemungkinan ada pemberitaan yang memancing kritik."
-        now = f"Baca sumber pada {_day(peak['date'], grain)} di daftar bukti, lalu nilai perlu tidaknya klarifikasi. Keputusan tetap pada pimpinan."
+        so = f"Puncak pada {_day(peak['date'], grain)} didorong nada negatif ({_pct(peak_neg)}), terutama kategori {peak_cat}. Berpotensi memengaruhi persepsi terhadap mandat BI."
+        now = (
+            f"Kehumasan meninjau sumber puncak {_day(peak['date'], grain)} dan menyiapkan opsi klarifikasi media sosial atau keterangan pers. "
+            "KRITIS: hindari menunggu bila media tier-1 ikut membawa narasi downside."
+        )
     elif spikes or direction == "naik":
-        so = f"Perhatian publik menguat; kategori {peak_cat} paling banyak muncul pada puncak ({peak_cat_n} dari {peak['total']} mention). Nada belum didominasi negatif."
-        now = f"Pantau kategori {peak_cat} pada pembaruan berikutnya. Siapkan bahan penjelasan bila porsi negatif mulai naik."
+        so = f"Volume {direction}; kategori {peak_cat} memimpini puncak ({peak_cat_n}/{peak['total']} mention). Momentum perlu dipantau terhadap kredibilitas komunikasi BI."
+        now = f"Pantau kategori {peak_cat}. Siapkan rancangan edukasi/penjelasan bila porsi negatif melampaui {_pct(WATCH_NEGATIVE)}."
     else:
-        so = "Percakapan relatif stabil. Belum terlihat tanda eskalasi dari pola volume."
-        now = "Lanjutkan pemantauan rutin. Tidak ada tindakan yang dipaksakan."
-    return {"rows": rows, "facts": facts, "evidence": _top(peak_rows), "what": what, "so": so, "now": now}
+        so = "Pola volume relatif stabil; belum terdeteksi lonjakan yang mengarah ke eskalasi reputasi."
+        now = "Lanjutkan pemantauan rutin sesuai siklus KPw. Tidak ada respons wajib tanpa temuan downside baru."
+    return {"rows": rows, "facts": facts, "evidence": _top(peak_rows), "what": what, "so": so, "now": now, "critical": critical}
 
 
 def _komposisi(db: Session, window: dict) -> dict:
@@ -186,12 +194,16 @@ def _komposisi(db: Session, window: dict) -> dict:
     if share["negatif"] >= WATCH_NEGATIVE:
         so += f" Porsi negatif sudah melewati ambang pantau {_pct(WATCH_NEGATIVE)}."
     rising = neg_delta is not None and neg_delta >= 5
+    critical = share["negatif"] >= WATCH_NEGATIVE or rising
     if share["negatif"] >= WATCH_NEGATIVE or rising:
-        now = f"Tinjau berita negatif teratas kategori {neg_cat} di daftar bukti. Siapkan bahan klarifikasi bila ada fakta keliru, untuk diputuskan pimpinan."
+        now = (
+            f"Tinjau {len(negatives)} konten negatif (kategori utama {neg_cat}). "
+            "Susun draf klarifikasi bila ada fakta keliru. KRITIS bila hoaks mengatasnamakan BI."
+        )
     else:
-        now = "Komposisi masih aman. Berita positif bisa jadi bahan komunikasi setelah disetujui pimpinan."
+        now = "Komposisi sentimen masih dalam ambang pantau. Konten positif dapat dipertimbangkan untuk amplifikasi edukasi setelah persetujuan pimpinan."
     evidence = _top(negatives) or _top(rows)
-    return {"rows": rows, "facts": facts, "evidence": evidence, "what": what, "so": so, "now": now}
+    return {"rows": rows, "facts": facts, "evidence": evidence, "what": what, "so": so, "now": now, "critical": critical}
 
 
 def _volume(db: Session, window: dict) -> dict:
@@ -214,13 +226,14 @@ def _volume(db: Session, window: dict) -> dict:
     up_rows = [row for row in rows if (row.category or "Lainnya") == up["category"]]
     up_neg = analytics._sentiment_share(up_rows)["negatif"] if up_rows else 0.0
     facts.update({"naik_terbesar": up["category"], "naik_negatif_pct": up_neg})
+    critical = up_neg >= 40
     if up_neg >= 40:
-        so = f"Kenaikan {up['category']} disertai nada negatif {_pct(up_neg)}. Topik ini berpotensi menjadi isu."
-        now = f"Buka isu {up['category']} dan baca sumber di daftar bukti. Nilai perlu tidaknya penjelasan, keputusan pada pimpinan."
+        so = f"Kenaikan kategori {up['category']} disertai nada negatif {_pct(up_neg)} — berpotensi menyesatkan persepsi kebijakan/sistem pembayaran."
+        now = f"Konsolidasi isu {up['category']} dan verifikasi bukti. Koordinasi Kehumasan–Unit terkait sebelum keterangan resmi."
     else:
-        so = f"Perhatian bergeser ke {up['category']}; nada negatifnya {_pct(up_neg)}, belum dominan."
-        now = f"Pantau {up['category']} pada pembaruan berikutnya. Bila relevan, siapkan bahan edukasi untuk ditinjau."
-    return {"rows": rows, "facts": facts, "evidence": _top(up_rows), "what": what, "so": so, "now": now, "no_baseline": no_baseline}
+        so = f"Prioritas perhatian publik bergeser ke {up['category']} (negatif {_pct(up_neg)})."
+        now = f"Pantau {up['category']}; siapkan materi edukasi BI bila relevan dengan mandat KPw."
+    return {"rows": rows, "facts": facts, "evidence": _top(up_rows), "what": what, "so": so, "now": now, "no_baseline": no_baseline, "critical": critical}
 
 
 def _kata(db: Session, window: dict) -> dict:
@@ -242,12 +255,15 @@ def _kata(db: Session, window: dict) -> dict:
     if related:
         what += f" Kata {top} paling sering muncul bersama {', '.join(related)}."
     so = f"Percakapan berpusat pada {top}, terutama kategori {cat} ({cat_n} dari {len(holders)} mention yang memuat kata itu). Nada negatifnya {_pct(neg)}."
+    critical = neg >= 40
     if neg >= 40:
-        so += " Kata ini berpotensi menjadi isu."
-        now = f"Cari {top} di Jelajah Berita dan baca sumber di daftar bukti. Nilai perlu tidaknya penjelasan, keputusan pada pimpinan."
+        so += " Frasa ini berpotensi menjadi isu reputasi; perlu pembacaan hati-hati terhadap konteks kebijakan."
+        now = (
+            f"Lacak frasa «{top}» di Jelajah Berita. KRITIS: susun klarifikasi bila hoaks atau simplifikasi kebijakan moneter."
+        )
     else:
-        now = f"Pantau kata {top} pada pembaruan berikutnya. Tidak ada tindakan yang dipaksakan."
-    return {"rows": holders or rows, "facts": facts, "evidence": _top(holders), "what": what, "so": so, "now": now, "cap": True}
+        now = f"Pantau «{top}» pada siklus berikutnya. Belum ada respons wajib tanpa peningkatan nada negatif."
+    return {"rows": holders or rows, "facts": facts, "evidence": _top(holders), "what": what, "so": so, "now": now, "cap": True, "critical": critical}
 
 
 def _suara(db: Session, window: dict, topic: str, segment: str, area: str) -> dict:
@@ -278,16 +294,17 @@ def _suara(db: Session, window: dict, topic: str, segment: str, area: str) -> di
     main_topic = Counter(topic_of(row) for row in members[dominant]).most_common(1)[0][0]
     facts.update({"suara_dominan": VOICE_LABEL[dominant], "topik_dominan": main_topic})
     so = f"Suara yang paling banyak terbaca adalah {VOICE_LABEL[dominant].lower()} ({len(members[dominant])} konten), terutama topik {main_topic}."
+    critical = bool(members["hoaks"])
     if members["hoaks"]:
-        so += f" Ada {len(members['hoaks'])} konten berpola hoaks yang perlu dicek sebelum menyebar."
-        now = "Verifikasi konten berpola hoaks di daftar bukti, lalu bahas klarifikasi dengan pimpinan."
+        so += f" Terdapat {len(members['hoaks'])} konten berpola hoaks — risiko kredibilitas kanal resmi Bank Indonesia."
+        now = "KRITIS: verifikasi hoaks dengan Unit Hukum; siapkan klarifikasi kanal resmi dalam 24 jam setelah fakta lengkap."
     elif dominant == "keluhan":
-        now = f"Buka Keluhan ke Solusi untuk melihat unit terkait topik {main_topic}. Tindak lanjut diputuskan pimpinan."
+        now = f"Koordinasi unit terkait topik {main_topic} (matriks Keluhan ke Solusi). Sampaikan persepsi, bukan perubahan kebijakan moneter."
     elif dominant == "kebutuhan":
-        now = f"Siapkan bahan informasi atau edukasi tentang {main_topic} untuk ditinjau sebelum dipakai."
+        now = f"Siapkan bahan edukasi {main_topic} ragam BI untuk ditinjau Kehumasan/KPw sebelum dipublikasikan."
     else:
-        now = "Apresiasi bisa jadi bahan komunikasi setelah disetujui pimpinan."
-    return {"rows": rows, "facts": facts, "evidence": _top(members[focus]), "what": what, "so": so, "now": now, "cap": True}
+        now = "Pertimbangkan amplifikasi apresiasi pada kanal resmi setelah persetujuan pimpinan."
+    return {"rows": rows, "facts": facts, "evidence": _top(members[focus]), "what": what, "so": so, "now": now, "cap": True, "critical": critical}
 
 
 def _numbers(text: str) -> set[str]:
@@ -331,6 +348,41 @@ def _cap(level: str, no_baseline: bool) -> str:
     return "Sedang" if no_baseline and level == "Tinggi" else level
 
 
+def _apply_bi_voice(chart: str, sections: dict, *, thin: bool, critical: bool) -> dict:
+    title = CHARTS.get(chart, chart)
+    what = (sections.get("what") or "").strip()
+    so = (sections.get("so") or "").strip()
+    now = (sections.get("now") or "").strip()
+    if thin:
+        return {
+            "what": (
+                f"Bank Indonesia/KPw BI DKI Jakarta — grafik {title}: "
+                f"{what or 'rentang belum memuat cukup konten.'} "
+                "Perluas filter tanggal atau jalankan pembaruan data."
+            ),
+            "so": THIN,
+            "now": THIN + "\nLangkah: kumpulkan minimal sumber sesuai ambang dashboard, lalu ulangi Generate Insight.",
+        }
+    krit = "KRITIS (24 jam setelah verifikasi bukti): " if critical else ""
+    what_bi = (
+        f"Pemantauan media — {title}. Bank Indonesia mencatat: {what} "
+        "Data dari monitor persepsi publik, bukan siaran pers resmi."
+    )
+    so_bi = (
+        f"Hipotesis dampak persepsi (bukan keputusan kebijakan moneter): {so} "
+        "Baca bersama konteks mandat BI: stabilitas nilai tukar rupiah, sistem pembayaran, dan inflasi."
+    )
+    now_bi = (
+        f"{krit}Saran komunikasi Kehumasan/KPw:\n{now}\n\n"
+        "Langkah implementasi:\n"
+        "1. Verifikasi daftar bukti; selaraskan fakta dengan juru bicara resmi.\n"
+        "2. Susun draf keterangan pers/unggahan kanal resmi — bahasa Indonesia baku.\n"
+        "3. Tinjau Unit Hukum bila hoaks, penilaian individu, atau kutipan UU.\n"
+        "4. Tayang setelah persetujuan pimpinan; pantau sentimen 48 jam."
+    )
+    return {"what": what_bi, "so": so_bi, "now": now_bi}
+
+
 def generate(db: Session, window: dict, chart: str, grain: str = "day", topic: str = "", segment: str = "", area: str = "") -> dict:
     if chart == "trend":
         result = _trend(db, window, grain)
@@ -345,15 +397,19 @@ def generate(db: Session, window: dict, chart: str, grain: str = "day", topic: s
     rows = result["rows"]
     thin = insufficient(rows)
     sections = {"what": result["what"], "so": result["so"], "now": result["now"]}
-    method = "Aturan dari data grafik"
+    used_llm = False
     if not thin:
         rewritten = _llm(chart, result["facts"], result)
         if rewritten:
             sections = rewritten
-            method = f"Model bahasa ({configured_model()}), angka diperiksa terhadap data"
+            used_llm = True
+    critical = bool(result.get("critical"))
+    sections = _apply_bi_voice(chart, sections, thin=thin, critical=critical)
+    method = f"Ragam Bank Indonesia · {INSIGHT_VERSION}"
+    if used_llm:
+        method += f" · model {configured_model()} (angka diperiksa)"
     else:
-        sections["so"] = THIN
-        sections["now"] = THIN
+        method += " · disusun dari data grafik"
     return {
         "chart": chart,
         "title": CHARTS[chart],
@@ -365,4 +421,5 @@ def generate(db: Session, window: dict, chart: str, grain: str = "day", topic: s
         "insufficient": thin,
         "evidence": result["evidence"],
         "method": method,
+        "insight_version": INSIGHT_VERSION,
     }
