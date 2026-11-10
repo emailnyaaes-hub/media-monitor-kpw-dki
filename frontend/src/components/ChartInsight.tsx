@@ -87,7 +87,7 @@ export default function ChartInsight({ chart, granularity = 'day', extraQuery = 
         <div className="mt-2 space-y-2 border border-line bg-canvas/60 p-3 text-sm">
           <Section title="What happened">{data.what_happened}</Section>
           <Section title="So what" badge="Hipotesis AI">{data.so_what}</Section>
-          <Section title="Now what" badge="Saran, keputusan pada pimpinan">{data.now_what}</Section>
+          <Section title="Now what" badge="Prioritas tindak lanjut (disetujui pimpinan)">{data.now_what}</Section>
           <p className="text-xs">
             Keyakinan: <span className={`rounded-sm px-1.5 py-0.5 font-semibold ${CONFIDENCE_CLASS[data.keyakinan] || CONFIDENCE_CLASS.Rendah}`}>{data.keyakinan}</span>
           </p>

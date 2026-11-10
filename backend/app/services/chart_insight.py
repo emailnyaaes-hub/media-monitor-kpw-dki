@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.models import Mention
 from app.nlp.voice import VOICE_LABEL, VOICES, _evidence, confidence_of, insufficient, matches, snapshot, topic_of, voices_of
 from app.services import analytics
+from app.nlp.bi_style import BI_CHART_SUFFIX, BI_VOICE_GUIDE
 from app.services.dss_llm import _complete, configured_model
 
 CHARTS = {
@@ -34,13 +35,21 @@ MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", 
 THIN = "Data belum cukup, perlu verifikasi."
 WATCH_NEGATIVE = 25.0
 
-SYSTEM_PROMPT = """Anda membantu tim kehumasan Bank Indonesia membaca satu grafik dashboard.
-Tulis dalam Bahasa Indonesia formal dan netral, masing-masing satu sampai dua kalimat.
-Aturan:
+SYSTEM_PROMPT = f"""Anda membantu tim Kehumasan/KPw BI membaca satu grafik dashboard media monitor.
+Tulis komprehensif dan actionable untuk rapat pantauan, ragam bahasa Bank Indonesia.
+
+{BI_VOICE_GUIDE}
+
+{BI_CHART_SUFFIX}
+
+Aturan data:
 - Pakai hanya angka, tanggal, dan nama kategori yang ada di data. Jangan menambah angka.
 - Jangan menulis URL, nama media, atau kutipan.
-- so_what adalah hipotesis, bukan fakta. now_what adalah saran untuk ditinjau pimpinan, bukan keputusan.
-- Jangan menyarankan publikasi otomatis. Ini masukan persepsi publik, bukan kebijakan moneter.
+- what_happened: 2–3 kalimat fakta dari grafik (gaya laporan singkat BI).
+- so_what: 2–3 kalimat interpretasi berlabel hipotesis—dampak persepsi terhadap mandat BI/KPw.
+- now_what: 3–5 kalimat berisi prioritas, satu poin kritis, pemilik tindak lanjut, dan tenggat relatif (mis. 24–48 jam bila hoaks/negatif mendominasi).
+- Bukan keputusan kebijakan moneter; bukan instruksi tayang otomatis.
+
 Balas hanya JSON dengan kunci: what_happened, so_what, now_what."""
 
 

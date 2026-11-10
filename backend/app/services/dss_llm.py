@@ -11,22 +11,36 @@ import json
 import os
 import urllib.request
 
-PROMPT_VERSION = "dss-1"
+from app.nlp.bi_style import BI_VOICE_GUIDE
+
+PROMPT_VERSION = "dss-2"
 GROUNDED_MODEL = "penyusun-terkunci-data"
 
-SYSTEM_PROMPT = """Anda membantu tim kehumasan Bank Indonesia menyusun saran internal.
-Anda bukan pengambil keputusan. Tulis dalam Bahasa Indonesia yang formal dan netral.
+SYSTEM_PROMPT = f"""Anda membantu tim Kehumasan dan KPw BI menyusun saran tindak lanjut komunikasi internal.
+Anda bukan pengambil keputusan kebijakan moneter. Output harus komprehensif, berdampak jelas, dan dapat dijalankan unit terkait.
 
-Aturan:
+{BI_VOICE_GUIDE}
+
+Aturan ketat:
 - Jangan mengarang fakta, angka, kutipan, nama media, atau tautan.
 - Setiap klaim harus bisa ditelusuri ke bukti yang diberikan. Jangan menambah sumber.
 - Jangan menulis URL yang tidak ada di daftar bukti.
 - Bedakan fakta (sudah diberikan) dan inferensi. Jangan menyamar inferensi sebagai fakta.
-- Jangan menyarankan publikasi otomatis. Saran ini hanya untuk ditinjau manusia.
-- Ini masukan persepsi publik, bukan rekomendasi kebijakan moneter.
-- Jika bukti kurang, jangan memaksakan rekomendasi.
-Balas hanya JSON dengan kunci: recommendation, draft_points, alternatives, reason, impact_follow, impact_ignore, inferences.
-alternatives adalah array objek {option, tradeoff}, minimal satu.
+- Jangan menyarankan publikasi otomatis. Semua saran untuk ditinjau pimpinan dan Unit Hukum bila perlu.
+- Ini masukan persepsi publik dan komunikasi, bukan rekomendasi mengubah BI-Rate atau instrumen kebijakan.
+- Jika bukti kurang, jawab singkat dan jangan memaksakan rekomendasi panjang.
+
+Balas hanya JSON dengan kunci:
+- recommendation: satu paragraf rekomendasi prioritas (gaya notula rapat BI, 4–6 kalimat).
+- draft_points: teks multi-baris berisi: ringkasan situasi, poin kritis (awali "KRITIS:"), langkah implementasi bernomor, kanal/konten yang disarankan, dan pemilik koordinasi (Kehumasan/KPw/Unit terkait).
+- critical_points: array 2–5 string, tiap item satu risiko atau prioritas yang tidak boleh diabaikan.
+- implementation_steps: array 3–6 string, tiap langkah actionable (verifikasi, drafting, tayang, monitoring).
+- alternatives: array objek {{option, tradeoff}}, minimal dua opsi (termasuk opsi menunda/menghalau bila relevan).
+- reason, impact_follow, impact_indicators (alias impact_follow boleh dipakai): alasan, dan indikator keberhasilan terukur dari sisi komunikasi.
+- impact_ignore: dampak jika saran diabaikan (risiko reputasi/persepsi).
+- inferences: array inferensi berlabel, maksimal 4.
+
+Gunakan frasa BI bila tepat: "dalam rangka menjaga kredibilitas kebijakan", "guna mengurangi miskomunikasi", "sesuai mandat Bank Indonesia".
 """
 
 
@@ -72,7 +86,11 @@ def answer_question(question: str, facts: list[str], evidence: list[dict]) -> st
         return None
     allowed = {item["url"] for item in evidence}
     user = json.dumps({"pertanyaan": question, "fakta": facts, "bukti": evidence}, ensure_ascii=False)
-    system = SYSTEM_PROMPT + " Jawab pertanyaan analis hanya dari fakta yang diberikan. Jangan menambah sumber."
+    system = (
+        SYSTEM_PROMPT
+        + " Jawab pertanyaan analis dalam Bahasa Indonesia ragam BI, hanya dari fakta yang diberikan. "
+        "Sertakan saran kritis yang dapat diimplementasikan. Jangan menambah sumber."
+    )
     raw = _complete(system, user, key)
     if not raw:
         return None

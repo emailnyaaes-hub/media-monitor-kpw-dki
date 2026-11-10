@@ -14,6 +14,7 @@ import re
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from app.nlp.bi_style import BI_REVIEW_SUFFIX, BI_VOICE_GUIDE
 from app.services.dss_llm import _complete, _parse_json
 
 DISCLAIMER = (
@@ -398,13 +399,16 @@ def _llm(original: str, existing: list[dict]) -> list[dict]:
     if not key:
         return []
     system = (
-        "Anda reviewer komunikasi bank sentral. Balas JSON {\"findings\": [...]} . "
+        f"{BI_VOICE_GUIDE}\n\n{BI_REVIEW_SUFFIX}\n\n"
+        "Anda reviewer komunikasi Bank Indonesia. Balas JSON {\"findings\": [...]} . "
         "Periksa: (1) regulasi perundang-undangan—acu UU bila relevan tanpa nomor pasal; "
-        "(2) kata baku Bahasa Indonesia; (3) kejelasan dan ketepatan kata, hindari ambiguitas. "
-        "Setiap temuan punya kalimat, kategori (regulasi|kata_baku|kejelasan|reputasi), risiko (Tinggi|Sedang|Rendah), "
-        "masalah, dasar_hukum, saran, alasan, opsional hapus (potongan asli), tambah (potongan pengganti). "
-        "Jangan menulis nomor pasal. Jika ragu, tulis nama UU dan 'Perlu verifikasi tim Hukum'. "
-        "Jangan menambah fakta yang tidak ada di draf."
+        "(2) kata baku Bahasa Indonesia; (3) kejelasan dan ketepatan kata. "
+        "Prioritaskan temuan KRITIS yang menghalangi terbit. "
+        "Setiap temuan: kalimat, kategori (regulasi|kata_baku|kejelasan|reputasi), risiko, masalah, dasar_hukum, "
+        "saran (teks pengganti ragam siaran pers BI), alasan (dampak hukum/reputasi/persepsi), "
+        "opsional hapus/tambah untuk track changes. "
+        "Jangan menulis nomor pasal. Jika ragu: nama UU + 'Perlu verifikasi tim Hukum'. "
+        "Jangan menambah fakta di luar draf."
     )
     raw = _complete(system, original[:6000], key)
     parsed = _parse_json(raw or "")

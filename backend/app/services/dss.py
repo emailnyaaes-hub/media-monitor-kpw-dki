@@ -572,6 +572,29 @@ def _policy(topic: str, rows: list[Mention], settings: dict) -> dict:
     )
 
 
+def _merge_draft_points(rewritten: dict, fallback: str) -> str:
+    base = str(rewritten.get("draft_points") or fallback or "").strip()
+    lines = [base] if base else []
+    critical = rewritten.get("critical_points") or []
+    steps = rewritten.get("implementation_steps") or []
+    if isinstance(critical, list) and critical:
+        lines.append("")
+        lines.append("Poin kritis:")
+        for item in critical[:6]:
+            text = str(item).strip()
+            if text:
+                lines.append(f"• {text[:400]}")
+    if isinstance(steps, list) and steps:
+        lines.append("")
+        lines.append("Langkah implementasi:")
+        for idx, item in enumerate(steps[:8], start=1):
+            text = str(item).strip()
+            if text:
+                lines.append(f"{idx}. {text[:400]}")
+    merged = "\n".join(lines).strip()
+    return merged[:4000] if merged else (fallback or "")[:2000]
+
+
 def _card(**kwargs) -> dict:
     rows = kwargs["rows"]
     evidence = [_evidence_item(row) for row in rows if row.url.startswith("http")]
@@ -616,9 +639,10 @@ def _card(**kwargs) -> dict:
         rewritten = rewrite_inference(draft)
         if rewritten:
             draft["recommendation"] = str(rewritten.get("recommendation") or draft["recommendation"])[:2000]
-            draft["draft_points"] = str(rewritten.get("draft_points") or draft["draft_points"])[:2000]
+            draft["draft_points"] = _merge_draft_points(rewritten, draft.get("draft_points") or "")
             draft["reason"] = str(rewritten.get("reason") or draft["reason"])[:2000]
-            draft["impact_follow"] = str(rewritten.get("impact_follow") or draft["impact_follow"])[:1000]
+            impact = rewritten.get("impact_follow") or rewritten.get("impact_indicators")
+            draft["impact_follow"] = str(impact or draft["impact_follow"])[:1000]
             draft["impact_ignore"] = str(rewritten.get("impact_ignore") or draft["impact_ignore"])[:1000]
             alts = rewritten.get("alternatives") or []
             if isinstance(alts, list) and alts:

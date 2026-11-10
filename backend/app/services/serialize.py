@@ -124,7 +124,7 @@ def issue_detail(row: Issue, mention_count: int) -> dict:
             "ai_sentiment": row.ai_sentiment,
             "ai_impact": row.ai_impact,
             "ai_recommendation": row.ai_recommendation,
-            "ai_note": "Ringkasan ini saran bacaan. Verifikasi sebelum dibawa ke rapat atau pernyataan resmi.",
+            "ai_note": "Ringkasan AI memakai ragam bahasa Bank Indonesia sebagai alat bantu. Verifikasi fakta, selaraskan dengan Unit Hukum, dan setujui pimpinan sebelum dipublikasikan.",
         }
     )
     return data

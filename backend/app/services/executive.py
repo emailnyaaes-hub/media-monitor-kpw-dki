@@ -270,10 +270,12 @@ def _maybe_llm(summary: str, links: list[dict]) -> str:
 
     allowed = {item["url"] for item in links}
     numbers = set(re.findall(r"\d+(?:[.,]\d+)?", summary))
+    from app.nlp.bi_style import BI_EXECUTIVE_SUFFIX, BI_VOICE_GUIDE
+
     system = (
-        "Anda menulis satu paragraf Bahasa Indonesia formal, 5 sampai 8 kalimat, "
-        "hanya dari ringkasan dan tautan yang diberikan. Jangan menambah URL, angka, atau peristiwa. "
-        "Balas teks polos tanpa markdown."
+        f"{BI_VOICE_GUIDE}\n\n{BI_EXECUTIVE_SUFFIX}\n\n"
+        "Tulis satu paragraf teks polos tanpa markdown, hanya dari ringkasan dan tautan yang diberikan. "
+        "Jangan menambah URL, angka, atau peristiwa baru. Akhiri dengan satu kalimat implikasi komunikasi yang dapat ditindaklanjuti KPw."
     )
     user = json.dumps({"ringkasan": summary, "tautan": links}, ensure_ascii=False)
     raw = _complete(system, user, key)
