@@ -37,6 +37,7 @@ interface ReviewResult {
   track?: TrackPiece[]
   error?: string
   method?: string
+  uu_corpus?: string
   saved?: boolean
 }
 
@@ -227,6 +228,9 @@ export default function ReviewPage() {
               UU / regulasi {result.counts.regulasi || 0} · Implikasi hukum {result.counts.implikasi_hukum || 0} · Kata baku {result.counts.kata_baku || 0} · Kejelasan {result.counts.kejelasan || 0}
               {(result.counts.reputasi || 0) > 0 ? ` · Reputasi ${result.counts.reputasi}` : ''}
               {result.method ? ` · ${result.method}` : ''}
+              {result.uu_corpus ? (
+                <span className="block text-xs text-muted">{result.uu_corpus}</span>
+              ) : null}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button className="h-10 rounded-lg border border-line px-3 text-sm" onClick={() => setResult({ ...result, findings: result.findings.map((item) => ({ ...item, accepted: true })) })}>Terapkan semua saran</button>

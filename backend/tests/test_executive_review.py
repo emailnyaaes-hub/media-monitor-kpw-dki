@@ -94,7 +94,8 @@ class ReviewTests(unittest.TestCase):
                 "",
             )
         text = " ".join(item["masalah"] for item in result["findings"])
-        self.assertIn("review-rules-4", result["method"])
+        self.assertIn("review-rules-5", result["method"])
+        self.assertIn("uu-corpus", result["method"])
         self.assertTrue(any(item.get("tambah") for item in result["findings"]))
         self.assertTrue("inflasi" in result["revised"].lower() or any("inflasa" in (item.get("hapus") or "") for item in result["findings"]))
 

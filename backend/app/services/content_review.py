@@ -16,14 +16,14 @@ from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from app.nlp.bi_style import BI_REVIEW_SUFFIX, BI_VOICE_GUIDE
-from app.services import content_review_legal
+from app.services import content_review_legal, content_review_uu_corpus
 from app.services.dss_llm import _complete, _parse_json
 
 DISCLAIMER = (
     "Hasil review adalah alat bantu AI dan tidak menggantikan review resmi "
     "oleh Unit Hukum/Kepatuhan."
 )
-REVIEW_RULES_VERSION = "review-rules-4"
+REVIEW_RULES_VERSION = "review-rules-5"
 
 UU_EXPECTED_YEAR = {
     4: 2023,
@@ -336,10 +336,11 @@ def review(text: str, kind: str = "siaran", platform: str = "") -> dict:
         "counts": _counts(findings),
         "track": track_changes_view(original, findings),
         "method": (
-            f"aturan-{REVIEW_RULES_VERSION}"
+            f"aturan-{REVIEW_RULES_VERSION}+{content_review_uu_corpus.catalog_version()}"
             if not os.environ.get("LLM_API_KEY", "").strip()
-            else f"aturan+model-{REVIEW_RULES_VERSION}"
+            else f"aturan+model-{REVIEW_RULES_VERSION}+{content_review_uu_corpus.catalog_version()}"
         ),
+        "uu_corpus": content_review_uu_corpus.corpus_sources_line(),
     }
 
 

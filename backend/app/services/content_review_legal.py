@@ -9,6 +9,8 @@ import re
 from dataclasses import dataclass
 from typing import Callable
 
+from app.services import content_review_uu_corpus as uu_corpus
+
 UU_PASAL_MAX = {
     (4, 2023): 165,
     (8, 1999): 61,
@@ -241,6 +243,7 @@ IMPLIKASI_BAHASA = [
 
 def analyze(text: str, make_finding: Callable[..., dict]) -> list[dict]:
     findings: list[dict] = []
+    findings.extend(uu_corpus.analyze_corpus(text, make_finding))
     findings.extend(_citation_checks(text, make_finding))
     findings.extend(_pattern_checks(text, IMPLIKASI_SUBSTANSI, make_finding, "Substansi"))
     findings.extend(_pattern_checks(text, IMPLIKASI_BAHASA, make_finding, "Bahasa"))
@@ -280,9 +283,9 @@ def _citation_checks(text: str, make_finding: Callable[..., dict]) -> list[dict]
         s_start, s_end = _sentence_bounds(text, span_start)
         sentence = text[s_start:s_end].strip()
         key = (num, year)
-        uu_label = UU_NAMES.get(key, f"UU No. {num} Tahun {year}")
+        uu_label = uu_corpus.uu_label(num, year) or UU_NAMES.get(key, f"UU No. {num} Tahun {year}")
 
-        pasal_max = UU_PASAL_MAX.get(key)
+        pasal_max = uu_corpus.pasal_max_from_corpus(num, year) or UU_PASAL_MAX.get(key)
         if pasal_max and pasal > pasal_max:
             saran = f"[Hapus rujukan] — Pasal {pasal} tidak teridentifikasi pada {uu_label} (katalog internal hingga Pasal {pasal_max})."
             found.append(
@@ -326,6 +329,7 @@ def _citation_checks(text: str, make_finding: Callable[..., dict]) -> list[dict]
             continue
 
         if profile:
+            extra = uu_corpus.enrich_pasal_problem(num, year, pasal)
             if profile.tidak_cocok and profile.tidak_cocok.search(sentence):
                 found.append(
                     make_finding(
@@ -334,7 +338,8 @@ def _citation_checks(text: str, make_finding: Callable[..., dict]) -> list[dict]
                         sentence,
                         "implikasi_hukum",
                         "Tinggi",
-                        f"Substansi kalimat tidak selaras dengan Pasal {pasal} ({profile.ringkas}) pada {uu_label}.",
+                        f"Substansi kalimat tidak selaras dengan Pasal {pasal} ({profile.ringkas}) pada {uu_label}."
+                        + (f" {extra}" if extra else ""),
                         f"{uu_label}. Perlu verifikasi tim Hukum.",
                         "Ubah substansi atau ganti rujukan setelah konfirmasi Hukum; jangan memaksakan pasal yang tidak relevan.",
                         "Rujukan pasal yang tidak relevan dapat dianggap misleading dan membahayakan posisi hukum BI.",
