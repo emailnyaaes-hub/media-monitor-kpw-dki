@@ -444,6 +444,11 @@ def get_issue(issue_id: int, db: Session = Depends(get_db), _: CurrentUser = Dep
         db.query(Mention).filter(Mention.issue_id == row.id).order_by(Mention.published_at.asc()),
         load_rules(db),
     ).all()
+    if len(mentions) >= 2:
+        from app.services.issue_narrative import fill_ai_fields
+
+        fill_ai_fields(row, mentions)
+        db.commit()
     data = issue_detail(row, len(mentions))
     data["timeline"] = [mention_card(item) for item in mentions]
     data["timeline_note"] = "Linimasa menampilkan seluruh riwayat isu, tidak dipotong filter tanggal."

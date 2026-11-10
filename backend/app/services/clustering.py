@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.models import Advice, Alert, Issue, Mention
 from app.nlp.risk import score_risk
 from app.services.clock import now_wib
+from app.services.issue_narrative import fill_ai_fields
 
 
 def rebuild_issues(db: Session) -> int:
@@ -87,7 +88,6 @@ def _fill_issue(issue: Issue, members: list[Mention], tag: str) -> None:
     velocity = round(min(100.0, len(members) / span * 18), 1)
     risk_values = [item.risk_score for item in members]
     risk = round(sum(risk_values) / len(risk_values), 1)
-    links = [f"{item.source_name}: {item.title} — {item.url}" for item in members[:6]]
     issue.title = members[-1].title[:300]
     issue.summary = f"{len(members)} pemberitaan pada {tag}. Judul terbaru dipakai sebagai judul isu."
     issue.category = members[-1].category
@@ -102,19 +102,7 @@ def _fill_issue(issue: Issue, members: list[Mention], tag: str) -> None:
     issue.is_kpw = any(item.is_kpw for item in members)
     issue.is_critical = risk >= 75 and stance == "downside"
     issue.spike_detected = velocity >= 50 and len(members) >= 4
-    issue.ai_what = "Ringkasan ini hanya menyusun judul yang benar-benar terkumpul.\n" + "\n".join(links)
-    issue.ai_who = "Sumber: " + ", ".join(sorted({item.source_name for item in members}))
-    issue.ai_sentiment = (
-        f"Dari {len(members)} item: "
-        f"{sum(item.sentiment == 'positif' for item in members)} positif, "
-        f"{sum(item.sentiment == 'netral' for item in members)} netral, "
-        f"{sum(item.sentiment == 'negatif' for item in members)} negatif."
-    )
-    issue.ai_impact = "Dampak dibaca dari sebaran nada pada judul dan cuplikan feed, bukan dari artikel penuh dan bukan dari fakta tambahan."
-    issue.ai_recommendation = (
-        "Saran komunikasi: buka setiap tautan sumber sebelum menyusun narasi. "
-        + ("Nada downside lebih banyak. Siapkan klarifikasi hanya setelah fakta dicek pada sumber asli." if stance == "downside" else "Nada belum mengeras. Tetap cantumkan tautan saat membahas isu ini.")
-    )
+    fill_ai_fields(issue, members)
 
 
 def _majority(values: list[str]) -> str:

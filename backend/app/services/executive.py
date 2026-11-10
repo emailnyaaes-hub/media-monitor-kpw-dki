@@ -249,15 +249,15 @@ def _summary(title: str, rows: list, stance: str, mix: dict, links: list[dict]) 
     label = {"upside": "Upside", "downside": "Downside", "netral": "Netral"}[stance]
     latest = _plain(links[0]["title"])
     safe_title = _plain(title)
+    cat = rows[-1].category if rows else "Lainnya"
     sentences = [
-        f"Pada {start} sampai {end} tersimpan {len(rows)} pemberitaan yang dikelompokkan pada isu \"{safe_title}\".",
-        f"Sumber yang menurunkan judul ini antara lain {media}.",
-        f"Isu ini masuk kategori {rows[-1].category} dan menyebut institusi atau topik yang sudah ada pada judul sumber, termasuk Bank Indonesia bila nama itu tertulis di judul.",
-        "Konteks yang dapat dibaca terbatas pada judul dan tautan yang tersimpan, bukan pada teks lengkap artikel.",
-        f"Komposisi klasifikasi otomatis adalah {round(mix['positif'])}% positif, {round(mix['netral'])}% netral, dan {round(mix['negatif'])}% negatif, sehingga label dominan adalah {label}.",
-        "Dampak terhadap kebijakan, rupiah, inflasi, sistem pembayaran, atau stabilitas tidak dihitung sebagai angka baru.",
-        f"Perkembangan terkini pada klaster ini adalah judul \"{latest}\" tanggal {end}.",
-        "Ringkasan ini menyalin fakta dari basis data dan tidak menambahkan peristiwa di luar tautan yang ditampilkan.",
+        f"Pada periode {start} hingga {end}, Bank Indonesia mencatat {len(rows)} konten eksternal pada isu \"{safe_title}\".",
+        f"Media dan kanal yang memuat judul terkait antara lain {media}.",
+        f"Isu diklasifikasi dalam kategori {cat}; pembacaan diambil dari judul dan cuplikan, bukan teks artikel penuh.",
+        f"Komposisi sentimen otomatis: {round(mix['positif'])}% positif, {round(mix['netral'])}% netral, {round(mix['negatif'])}% negatif — dominan {label}.",
+        "Implikasi persepsi terhadap mandat kebijakan moneter dan stabilitas disampaikan sebagai bahan rapat, tanpa angka kebijakan baru.",
+        f"Perkembangan terbaru: \"{latest}\" ({end}).",
+        "KPw BI DKI Jakarta disarankan memverifikasi bukti sebelum menyusun respons resmi.",
     ]
     return " ".join(sentences[:8])
 

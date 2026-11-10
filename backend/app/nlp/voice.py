@@ -447,6 +447,14 @@ def _recommendation(rows: list, voices: Counter) -> dict:
     elif not thin and len(hits) >= 3:
         urgensi = "Minggu ini"
     teks = "Data belum cukup, perlu verifikasi" if thin else rule["tindakan"]
+    if not thin:
+        teks = (
+            f"Bank Indonesia menyarankan (internal, bukan rilis otomatis): {teks} "
+            f"Unit penanggung jawab: {rule['unit']}. Urgensi: {urgensi}. "
+            "KRITIS: verifikasi tautan bukti sebelum koordinasi dengan juru bicara. "
+            "Langkah: (1) kumpulkan fakta dari sumber, (2) selaraskan Unit Hukum bila perlu, "
+            "(3) tayangkan melalui kanal resmi setelah disetujui pimpinan."
+        )
     return {
         "jenis": rule["jenis"],
         "teks": teks,
@@ -485,8 +493,12 @@ def build_brief(rows: list) -> dict:
     voice_counts = Counter(name for _, item in described for name in item["voices"])
     parts = [f"{VOICE_LABEL[name]} {voice_counts[name]}" for name in VOICES if voice_counts[name]]
     apa = (
-        f"{len(rows)} konten eksternal. "
-        + ("Dimensi yang terbaca: " + ", ".join(parts) + "." if parts else "Belum ada dimensi keluhan, apresiasi, kebutuhan, atau hoaks pada judul dan cuplikan.")
+        f"Bank Indonesia/KPw BI DKI Jakarta mencatat {len(rows)} konten eksternal dalam kelompok ini. "
+        + (
+            "Dimensi suara publik: " + ", ".join(parts) + "."
+            if parts
+            else "Belum ada keluhan, apresiasi, kebutuhan, atau hoaks yang terbaca pada judul dan cuplikan."
+        )
     )
     ordered = sorted(rows, key=lambda item: item.published_at)
     return {
@@ -502,7 +514,7 @@ def build_brief(rows: list) -> dict:
         "wilayah": _count([item["area"] for _, item in described]),
         "keyakinan": confidence_of(rows),
         "disclaimer": DISCLAIMER,
-        "metode": "Apa, kenapa, dampak, dan rekomendasi disusun hanya dari konten eksternal yang tersimpan. Hipotesis tidak dipakai sebagai fakta.",
+        "metode": "Apa, kenapa, dampak, dan rekomendasi disusun dari konten eksternal (ragam notula BI). Hipotesis tidak dipakai sebagai fakta.",
     }
 
 

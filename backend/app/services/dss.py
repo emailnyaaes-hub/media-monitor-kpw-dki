@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.models import Advice, AdviceRevision, Alert, AppMeta, Issue, Mention
 from app.services.blocklist import external_only, is_blocked, load_rules
 from app.services.clock import now_wib
+from app.services.bi_narrative import enhance_draft_points, wrap_recommendation
 from app.services.dss_llm import GROUNDED_MODEL, PROMPT_VERSION, configured_model, rewrite_inference
 
 DISCLAIMER = (
@@ -370,8 +371,8 @@ def _communication(issue: Issue, rows: list[Mention], settings: dict) -> dict:
         "Inferensi dampak angka pada sentimen tidak tersedia dari feed.",
     ]
     voice = _voice(rows)
-    recommendation = "Data belum cukup, perlu verifikasi." if thin else action
-    draft = "" if thin else _draft(rows, settings["tone"])
+    recommendation = "Data belum cukup, perlu verifikasi." if thin else wrap_recommendation(action, channel, pack, issue.category, urgency)
+    draft = "" if thin else enhance_draft_points(_draft(rows, settings["tone"], issue.category), pack, channel, issue.category)
     alternatives = [
         {"option": "Kumpulkan sumber tambahan sebelum menyusun pesan", "tradeoff": "Tidak ada pernyataan sementara. Percakapan yang sudah tayang tetap tanpa tanggapan resmi."}
     ] if thin else [
@@ -805,9 +806,10 @@ def _pack(rows: list[Mention]) -> dict:
 
 def _situation(subject: str, pack: dict, rows: list[Mention]) -> str:
     return (
-        f"Sejak {pack['since']} tersimpan {pack['count']} konten eksternal tentang {subject}. "
-        f"Yang membicarakan: {pack['who'] or 'sumber tanpa nama'}. "
-        "Kalimat ini menyalin jumlah, waktu, dan nama sumber dari database, bukan dari ringkasan baru."
+        f"Bank Indonesia mencatat sejak {pack['since']} sebanyak {pack['count']} konten eksternal terkait {subject}. "
+        f"Sumber: {pack['who'] or 'belum teridentifikasi'}. "
+        f"Tercatat {pack['downside']} konten downside, {pack['tier1']} media tier-1. "
+        "Data bersumber dari feed monitor; bukan rilis resmi BI."
     )
 
 
@@ -842,8 +844,9 @@ def _voice(rows: list[Mention]) -> str:
     return f"Opini/emosi publik menurut klasifikasi otomatis, bukan penilaian manusia: judul downside atau negatif — {titles}."
 
 
-def _draft(rows: list[Mention], tone: str) -> str:
-    lines = [f"Nada draf: {tone}. Poin di bawah menyalin judul sumber, bukan kutipan artikel penuh."]
+def _draft(rows: list[Mention], tone: str, category: str = "") -> str:
+    topic = f" Topik: {category}." if category else ""
+    lines = [f"Nada draf: {tone}.{topic} Poin di bawah menyalin judul sumber, bukan kutipan artikel penuh."]
     for row in rows[:4]:
         lines.append(f"- {row.source_name}: {row.title}")
     lines.append("- Analis dapat mengedit poin ini sebelum dipakai. Sistem tidak mengirimkannya.")
