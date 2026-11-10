@@ -23,7 +23,30 @@ DISCLAIMER = (
     "Hasil review adalah alat bantu AI dan tidak menggantikan review resmi "
     "oleh Unit Hukum/Kepatuhan."
 )
-REVIEW_RULES_VERSION = "review-rules-6"
+REVIEW_RULES_VERSION = "review-rules-8"
+
+PENDEKATAN = {
+    "siaran": (
+        "Siaran pers — ragam sangat formal: sapaan «Yth.», kalimat lugas, tanpa slang/emoji; "
+        "ketepatan hukum dan data tetap diperiksa ketat."
+    ),
+    "caption": (
+        "Caption sosial media — boleh memakai sapaan «Hi» (mis. «Hi Sobat BI»), tetap bahasa Indonesia baku; "
+        "hindari gak/ngga/utk/dgn dan slang berat; implikasi hukum tetap diperiksa ketat."
+    ),
+}
+
+EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001F300-\U0001FAFF"
+    "\u2600-\u27BF"
+    "]+",
+    re.UNICODE,
+)
+
+
+def _is_caption(kind: str) -> bool:
+    return (kind or "").strip().lower() == "caption"
 
 UU_EXPECTED_YEAR = {
     4: 2023,
@@ -271,14 +294,52 @@ KATA_BAKU_RULES = [
 
 TYPO_Q_PATTERN = re.compile(r"\b([a-z]{4,})kaq\b", re.I)
 
-INFORMAL_RULES = [
+SIARAN_INFORMAL_RULES = [
     (
         re.compile(r"\bHi\s+Warga(?:\s+Jakarta)?(?:\s+DKI)?(?:\s+Jakarta)?,?", re.I),
-        "Salam «Hi Warga» terlalu santai untuk kanal resmi BI/KPw.",
+        "Siaran pers: gunakan «Yth.», bukan «Hi Warga».",
         "Yth. Warga Jakarta,",
+        "Tinggi",
     ),
-    (re.compile(r"\b(dong|nih|deh|sih|banget|wkwk|anjir)\b", re.I), "Hapus kata informal dari kanal resmi.", "Tidak"),
-    (re.compile(r"\b(?:BANK INDONESIA|BANK\s+INDONESIA)\b"), "Nama institusi sebaiknya tidak ditulis seluruhnya kapital.", "Bank Indonesia"),
+    (
+        re.compile(r"^(Halo|Hello|Hi)\b", re.I | re.M),
+        "Siaran pers: gunakan pembuka «Yth.», bukan «Hi»/«Halo».",
+        "Yth. Warga Jakarta,",
+        "Sedang",
+    ),
+    (
+        re.compile(r"\b(dong|nih|deh|sih|banget|wkwk|anjir|gue|gw|lo)\b", re.I),
+        "Siaran pers: hapus kata slang/informal.",
+        "",
+        "Sedang",
+    ),
+    (
+        re.compile(r"\b(?:BANK INDONESIA|BANK\s+INDONESIA)\b"),
+        "Nama institusi sebaiknya tidak ditulis seluruhnya kapital.",
+        "Bank Indonesia",
+        "Sedang",
+    ),
+]
+
+CAPTION_INFORMAL_RULES = [
+    (
+        re.compile(r"^(Yth\.|Yang Terhormat)\s*", re.I | re.M),
+        "Caption: «Yth.» seperti siaran pers; untuk sosmed gunakan «Hi».",
+        "Hi ",
+        "Rendah",
+    ),
+    (
+        re.compile(r"\b(dong|nih|deh|sih|banget|wkwk|anjir|gue|gw|lo)\b", re.I),
+        "Caption: slang/informal — ganti kata baku meski nada boleh ringan.",
+        "",
+        "Sedang",
+    ),
+    (
+        re.compile(r"\b(?:BANK INDONESIA|BANK\s+INDONESIA)\b"),
+        "Nama institusi sebaiknya tidak ditulis seluruhnya kapital.",
+        "Bank Indonesia",
+        "Rendah",
+    ),
 ]
 
 KEJELASAN_PATTERNS = [
@@ -328,14 +389,16 @@ def review(text: str, kind: str = "siaran", platform: str = "") -> dict:
     findings.extend(_uu_checks(original))
     for chunk_start, chunk in _chunks(original):
         findings.extend(_rules(chunk, chunk_start))
-        findings.extend(_kata_baku(chunk, chunk_start))
+        findings.extend(_kata_baku(chunk, chunk_start, kind))
         findings.extend(_kejelasan(chunk, chunk_start))
-        findings.extend(_informal(chunk, chunk_start))
-        findings.extend(_typos(chunk, chunk_start))
+        findings.extend(_informal(chunk, chunk_start, kind))
+        findings.extend(_typos(chunk, chunk_start, kind))
+        findings.extend(_channel_ragam(chunk, chunk_start, kind))
         findings.extend(_style(chunk, chunk_start, kind, platform))
-    findings.extend(_llm(original, findings))
+    findings.extend(_llm(original, findings, kind))
     findings = _dedupe(findings)
     findings = _dedupe_overlapping(findings)
+    findings = _apply_kind_lens(findings, kind)
     revised = apply_all(original, findings)
     score, status = _score(findings)
     return {
@@ -355,6 +418,7 @@ def review(text: str, kind: str = "siaran", platform: str = "") -> dict:
             else f"aturan+model-{REVIEW_RULES_VERSION}+{content_review_uu_corpus.catalog_version()}"
         ),
         "uu_corpus": content_review_uu_corpus.corpus_sources_line(),
+        "pendekatan": PENDEKATAN.get(kind, PENDEKATAN["siaran"]),
     }
 
 
@@ -572,7 +636,70 @@ def _uu_checks(text: str) -> list[dict]:
     return found
 
 
-def _typos(chunk: str, offset: int) -> list[dict]:
+def _apply_kind_lens(findings: list[dict], kind: str) -> list[dict]:
+    if not _is_caption(kind):
+        return findings
+    kept = []
+    for item in findings:
+        masalah = (item.get("masalah") or "").lower()
+        if masalah.startswith("siaran pers:"):
+            continue
+        if "kanal resmi" in masalah and "tidak baku" in masalah:
+            item = {**item, "masalah": masalah.replace("kanal resmi", "caption"), "alasan": "Caption tetap memakai bahasa baku meski nada ringan."}
+        if item.get("kategori") == "kata_baku" and item.get("risiko") == "Sedang" and "slang" not in masalah and "gaul" not in masalah:
+            item = {**item, "risiko": "Rendah"}
+        kept.append(item)
+    return kept
+
+
+def _channel_ragam(chunk: str, offset: int, kind: str) -> list[dict]:
+    found = []
+    if _is_caption(kind):
+        return found
+
+    for match in EMOJI_PATTERN.finditer(chunk):
+        span_start = offset + match.start()
+        span_end = offset + match.end()
+        s0 = offset + _sentence_start(chunk, match.start())
+        s1 = offset + _sentence_end(chunk, match.end())
+        sentence = chunk[s0 - offset : s1 - offset].strip()
+        found.append(
+            _finding(
+                s0,
+                s1,
+                sentence,
+                "kata_baku",
+                "Sedang",
+                "Emoji tidak lazim pada siaran pers resmi.",
+                "Pedoman siaran pers Bank Indonesia.",
+                re.sub(EMOJI_PATTERN, "", sentence).strip(),
+                "Siaran pers memakai teks formal tanpa emoji.",
+                span_start=span_start,
+                span_end=span_end,
+                hapus=match.group(0),
+                tambah="",
+            )
+        )
+    if re.search(r"\bDengan\s+hormat\b", chunk, re.I) and re.search(r"\b(Hi|Halo)\b", chunk, re.I):
+        s0 = offset
+        s1 = offset + len(chunk)
+        found.append(
+            _finding(
+                s0,
+                s1,
+                chunk.strip(),
+                "kejelasan",
+                "Sedang",
+                "Campuran sapaan santai dan penutup sangat formal pada siaran pers.",
+                "Pedoman siaran pers.",
+                "Gunakan sapaan resmi konsisten (mis. «Yth. …») tanpa campuran gaya santai.",
+                "Gaya campuran mengurangi keseragaman siaran pers.",
+            )
+        )
+    return found
+
+
+def _typos(chunk: str, offset: int, kind: str = "siaran") -> list[dict]:
     found = []
     for match in TYPO_Q_PATTERN.finditer(chunk):
         word = match.group(0)
@@ -595,7 +722,8 @@ def _typos(chunk: str, offset: int) -> list[dict]:
                 f"Kemungkinan salah ketik «{hapus}» (akhiran «kaq» tidak lazim dalam bahasa Indonesia).",
                 "Pedoman Umum Ejaan Bahasa Indonesia. Bukan pasal undang-undangan.",
                 sentence.replace(hapus, tambah, 1).strip(),
-                "Salah ketik mengurangi kredibilitas siaran resmi.",
+                "Salah ketik mengurangi kredibilitas materi publik."
+                + ("" if _is_caption(kind) else " Siaran pers wajib bebas salah ketik."),
                 span_start=span_start,
                 span_end=span_end,
                 hapus=hapus,
@@ -605,33 +733,46 @@ def _typos(chunk: str, offset: int) -> list[dict]:
     return found
 
 
-def _informal(chunk: str, offset: int) -> list[dict]:
+def _informal(chunk: str, offset: int, kind: str = "siaran") -> list[dict]:
     found = []
-    for pattern, problem, tambah in INFORMAL_RULES:
+    caption = _is_caption(kind)
+    rules = CAPTION_INFORMAL_RULES if caption else SIARAN_INFORMAL_RULES
+    pedoman = "Pedoman kanal sosial BI/KPw." if caption else "Pedoman siaran pers Bank Indonesia."
+    for pattern, problem, tambah, risk in rules:
         for match in pattern.finditer(chunk):
             span_start = offset + match.start()
             span_end = offset + match.end()
-            hapus = chunk[match.start():match.end()]
-            sentence_start = offset + _sentence_start(chunk, match.start())
-            sentence_end = offset + _sentence_end(chunk, match.end())
-            sentence = chunk[sentence_start - offset : sentence_end - offset].strip()
-            suggestion = sentence.replace(hapus, tambah, 1) if tambah != "Hapus kata informal dari kanal resmi." else re.sub(pattern, "", sentence, count=1).strip()
-            suggestion = re.sub(r"\s+", " ", suggestion).strip(" ,")
+            hapus = chunk[match.start() : match.end()]
+            s0 = offset + _sentence_start(chunk, match.start())
+            s1 = offset + _sentence_end(chunk, match.end())
+            sentence = chunk[s0 - offset : s1 - offset].strip()
+            if tambah:
+                suggestion = sentence.replace(hapus, tambah, 1).strip()
+                tambah_val = tambah
+            else:
+                suggestion = re.sub(pattern, "", sentence, count=1)
+                suggestion = re.sub(r"\s+", " ", suggestion).strip(" ,")
+                tambah_val = ""
+            alasan = (
+                "Caption memakai nada dekat namun tetap baku."
+                if caption
+                else "Siaran pers memakai ragam resmi penuh."
+            )
             found.append(
                 _finding(
-                    sentence_start,
-                    sentence_end,
+                    s0,
+                    s1,
                     sentence,
                     "kata_baku",
-                    "Sedang",
+                    risk,
                     problem,
-                    "Pedoman bahasa Indonesia. Bukan pasal undang-undangan.",
+                    pedoman,
                     suggestion or problem,
-                    "Kanal Bank Indonesia memakai ragam formal.",
+                    alasan,
                     span_start=span_start,
                     span_end=span_end,
                     hapus=hapus,
-                    tambah=tambah if tambah != "Hapus kata informal dari kanal resmi." else "",
+                    tambah=tambah_val,
                 )
             )
     return found
@@ -651,8 +792,9 @@ def _locate_sentence(original: str, sentence: str) -> int | None:
     return None
 
 
-def _kata_baku(chunk: str, offset: int) -> list[dict]:
+def _kata_baku(chunk: str, offset: int, kind: str = "siaran") -> list[dict]:
     found = []
+    caption = _is_caption(kind)
     for pattern, replacement, reason in KATA_BAKU_RULES:
         for match in pattern.finditer(chunk):
             span_start = offset + match.start()
@@ -662,9 +804,17 @@ def _kata_baku(chunk: str, offset: int) -> list[dict]:
             sentence_end = offset + _sentence_end(chunk, match.end())
             sentence = chunk[sentence_start - offset:sentence_end - offset].strip()
             new_sentence = sentence[: match.start() - (sentence_start - offset)] + replacement + sentence[match.end() - (sentence_start - offset):]
+            risk = "Rendah"
+            if not caption and hapus.casefold() in {"gak", "ngga", "utk", "dgn", "kalo"}:
+                risk = "Sedang"
+            konteks = (
+                "Caption: gunakan bentuk baku meski nada santai."
+                if caption
+                else "Siaran pers: ragam sangat formal."
+            )
             found.append(_finding(
-                sentence_start, sentence_end, sentence, "kata_baku", "Rendah",
-                f"Kata «{hapus}» bukan bentuk baku dalam ragam resmi.",
+                sentence_start, sentence_end, sentence, "kata_baku", risk,
+                f"Kata «{hapus}» bukan bentuk baku ({konteks}).",
                 "Pedoman Umum Ejaan Bahasa Indonesia / KBBI. Bukan pasal undang-undangan.",
                 new_sentence.strip(),
                 reason,
@@ -708,11 +858,13 @@ def _style(chunk: str, offset: int, kind: str, platform: str) -> list[dict]:
         words = sentence.split()
         start = offset + match.start()
         end = offset + match.end()
-        if len(words) > 45:
+        word_limit = 58 if _is_caption(kind) else 42
+        if len(words) > word_limit:
             shorter = _shorten(sentence)
+            label = "caption" if _is_caption(kind) else "siaran pers"
             found.append(_finding(
                 start, end, sentence, "kejelasan", "Sedang",
-                "Kalimat lebih dari 45 kata dan sulit diikuti dalam sekali baca.",
+                f"Kalimat lebih dari {word_limit} kata dan sulit diikuti pada {label}.",
                 "Pedoman komunikasi yang jelas. Bukan pasal undang-undang. Perlu verifikasi tim Hukum bila menyangkut substansi.",
                 shorter,
                 "Kalimat yang lebih pendek mengurangi tafsir ganda.",
@@ -732,12 +884,20 @@ def _style(chunk: str, offset: int, kind: str, platform: str) -> list[dict]:
             rewritten = re.sub(r"\b(gue|lo|gw)\b", "Anda", sentence, flags=re.I)
             rewritten = re.sub(r"\b(wkwk|anjir)\b", "", rewritten, flags=re.I)
             rewritten = re.sub(r"\s+", " ", rewritten).strip()
+            if _is_caption(kind):
+                msg = "Caption: slang tidak baku meski nada boleh ringan."
+                alasan = "Caption tetap memakai bahasa baku."
+                risk = "Sedang"
+            else:
+                msg = "Siaran pers: hapus kata slang/informal."
+                alasan = "Siaran pers bebas slang."
+                risk = "Sedang"
             found.append(_finding(
-                start, end, sentence, "kata_baku", "Rendah",
-                "Ada kata tidak baku untuk kanal resmi.",
-                "Pedoman bahasa Indonesia. Bukan pasal undang-undang.",
+                start, end, sentence, "kata_baku", risk,
+                msg,
+                "Pedoman bahasa Indonesia. Bukan pasal undang-undangan.",
                 rewritten,
-                "Kanal Bank Indonesia memakai ragam formal.",
+                alasan,
                 hapus=sentence, tambah=rewritten,
             ))
         if kind == "caption" and platform in {"X", "Twitter"} and len(sentence) > 240:
@@ -753,12 +913,17 @@ def _style(chunk: str, offset: int, kind: str, platform: str) -> list[dict]:
     return found
 
 
-def _llm(original: str, existing: list[dict]) -> list[dict]:
+def _llm(original: str, existing: list[dict], kind: str = "siaran") -> list[dict]:
     key = os.environ.get("LLM_API_KEY", "").strip()
     if not key:
         return []
+    channel = (
+        "MODE: Caption sosial media — boleh sapaan «Hi» (mis. «Hi Sobat BI»), tetap KBBI, tanpa slang gaul. Jangan «Yth.»."
+        if _is_caption(kind)
+        else "MODE: Siaran pers — sangat formal, sapaan «Yth.», lugas, tanpa emoji dan tanpa kata gaul."
+    )
     system = (
-        f"{BI_VOICE_GUIDE}\n\n{BI_REVIEW_SUFFIX}\n\n"
+        f"{BI_VOICE_GUIDE}\n\n{BI_REVIEW_SUFFIX}\n\n{channel}\n\n"
         "Anda reviewer komunikasi Bank Indonesia. Balas JSON {\"findings\": [...]} . "
         "Periksa: (1) regulasi—UU/pasal benar dan relevan substansi; "
         "(2) implikasi pelanggaran hukum pada isi dan pilihan kata/bahasa; "
@@ -766,7 +931,7 @@ def _llm(original: str, existing: list[dict]) -> list[dict]:
         "Prioritaskan temuan KRITIS yang menghalangi terbit. "
         "Kategori implikasi_hukum untuk risiko pidana, fitnah, kutipan pasal keliru, dan bahasa yang mengikat secara hukum. "
         "Setiap temuan: kalimat, kategori (regulasi|kata_baku|kejelasan|reputasi), risiko, masalah, dasar_hukum, "
-        "saran (teks pengganti ragam siaran pers BI), alasan (dampak hukum/reputasi/persepsi), "
+        "saran (teks pengganti sesuai mode di atas), alasan (dampak hukum/reputasi/persepsi), "
         "opsional hapus/tambah untuk track changes. "
         "Jangan menulis nomor pasal. Jika ragu: nama UU + 'Perlu verifikasi tim Hukum'. "
         "Jangan menambah fakta di luar draf."

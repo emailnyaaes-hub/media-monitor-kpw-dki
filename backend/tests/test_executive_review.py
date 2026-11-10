@@ -94,7 +94,7 @@ class ReviewTests(unittest.TestCase):
                 "",
             )
         text = " ".join(item["masalah"] for item in result["findings"])
-        self.assertIn("review-rules-6", result["method"])
+        self.assertIn("review-rules-8", result["method"])
         self.assertIn("uu-corpus", result["method"])
         self.assertTrue(any(item.get("tambah") for item in result["findings"]))
         self.assertTrue("inflasi" in result["revised"].lower() or any("inflasa" in (item.get("hapus") or "") for item in result["findings"]))
@@ -143,6 +143,35 @@ class ReviewTests(unittest.TestCase):
         self.assertIn("implikasi_hukum", cats)
         blob = " ".join(item["masalah"] for item in result["findings"])
         self.assertTrue("Implikasi hukum" in blob or "tidak selaras" in blob or "menuding" in blob)
+
+    def test_siaran_flags_hi_warga_caption_allows(self):
+        draft = (
+            "Hi Warga Jakarta, Bank Indonesia mengingatkan masyarakat untuk waspada penipuan "
+            "yang mengatasnamakan lembaga ini."
+        )
+        with mock.patch.dict(os.environ, {"LLM_API_KEY": ""}):
+            siaran = review(draft, "siaran", "")
+            caption = review(draft, "caption", "Instagram")
+        siaran_hi = [f for f in siaran["findings"] if "hi warga" in (f.get("masalah") or "").lower() or "terlalu santai" in (f.get("masalah") or "").lower()]
+        self.assertTrue(siaran_hi, "Siaran pers harus menegur sapaan santai")
+        caption_siaran_tone = [f for f in caption["findings"] if (f.get("masalah") or "").lower().startswith("siaran pers:")]
+        self.assertEqual(caption_siaran_tone, [])
+        self.assertIn("pendekatan", caption)
+        self.assertIn("sosial", caption["pendekatan"].lower())
+
+    def test_caption_flags_formal_yth(self):
+        with mock.patch.dict(os.environ, {"LLM_API_KEY": ""}):
+            result = review(
+                "Yth. Warga Jakarta, simak tips aman bertransaksi digital dari Bank Indonesia.",
+                "caption",
+                "Instagram",
+            )
+        self.assertTrue(
+            any(
+                "yth" in (f.get("masalah") or "").lower() or "siaran pers" in (f.get("masalah") or "").lower()
+                for f in result["findings"]
+            )
+        )
 
     def test_pasal_and_menjamin(self):
         with mock.patch.dict(os.environ, {"LLM_API_KEY": ""}):

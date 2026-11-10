@@ -38,7 +38,15 @@ interface ReviewResult {
   error?: string
   method?: string
   uu_corpus?: string
+  pendekatan?: string
   saved?: boolean
+}
+
+const PENDEKATAN_HINT: Record<string, string> = {
+  siaran:
+    'Siaran pers: wajib gaya formal dengan «Yth.» (bukan «Hi»), tanpa slang/emoji. Hukum & data tetap ketat.',
+  caption:
+    'Caption: boleh «Hi» (mis. Hi Sobat BI); jangan «Yth.». Tetap bahasa baku—tanpa gak/ngga/utk/dgn.',
 }
 
 const RISKS = {
@@ -160,6 +168,7 @@ export default function ReviewPage() {
               <option value="siaran">Siaran Pers</option>
               <option value="caption">Caption Sosmed</option>
             </select>
+            <p className="mt-1 text-xs text-muted">{PENDEKATAN_HINT[kind] ?? PENDEKATAN_HINT.siaran}</p>
           </label>
           <label className="text-sm">Platform
             <select className="mt-1 h-10 w-full rounded-lg border border-line bg-card px-2" value={platform} onChange={(event) => setPlatform(event.target.value)} disabled={kind !== 'caption'}>
@@ -223,6 +232,9 @@ export default function ReviewPage() {
         <div>
           <Card className="mb-4">
             <p className="text-sm">{result.disclaimer}</p>
+            {result.pendekatan ? (
+              <p className="mt-2 rounded-lg border border-line bg-card px-3 py-2 text-xs text-muted">{result.pendekatan}</p>
+            ) : null}
             <p className="mt-2 text-2xl font-bold">{result.score}<span className="text-base font-normal text-muted"> / 100 · {result.status}</span></p>
             <p className="mt-1 text-sm text-muted">
               UU / regulasi {result.counts.regulasi || 0} · Implikasi hukum {result.counts.implikasi_hukum || 0} · Kata baku {result.counts.kata_baku || 0} · Kejelasan {result.counts.kejelasan || 0}
