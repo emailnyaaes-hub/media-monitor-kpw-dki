@@ -16,7 +16,7 @@ UU_PASAL_MAX = {
     (13, 2016): 463,
     (14, 2008): 77,
     (19, 2016): 55,
-    (20, 2016): 20,
+    (20, 2016): 143,
     (23, 1999): 74,
     (27, 2022): 76,
     (28, 2014): 198,
@@ -33,6 +33,7 @@ UU_NAMES = {
     (14, 2008): "UU No. 14 Tahun 2008 tentang KIP",
     (28, 2014): "UU No. 28 Tahun 2014 tentang Hak Cipta",
     (31, 2000): "UU No. 31 Tahun 2000 tentang Desain Tata Uang Rupiah",
+    (20, 2016): "UU No. 20 Tahun 2016 tentang Merek dan Indikasi Geografis",
 }
 
 
@@ -163,6 +164,26 @@ IMPLIKASI_SUBSTANSI = [
         "UU No. 8 Tahun 1999 tentang Perlindungan Konsumen. Perlu verifikasi tim Hukum.",
         "Hapus janji imbal hasil; edukasi risiko produk keuangan secara umum.",
         "Janji keuntungan finansial dari komunikasi BI berisiko perlindungan konsumen.",
+    ),
+    (
+        re.compile(
+            r"\b(menyarankan|menganjurkan)\b[^\n.]{0,120}\b(duplikasi|menduplikasi|meniru)\s+merek\b[^\n.]{0,80}\bterdaftar\b",
+            re.I | re.S,
+        ),
+        "Tinggi",
+        "Draf menyarankan duplikasi/peniruan merek terdaftar — berpotensi melanggar UU Merek dan Indikasi Geografis.",
+        "UU No. 20 Tahun 2016 tentang Merek dan Indikasi Geografis. Perlu verifikasi tim Hukum.",
+        "Kami mengimbau pelaku UMKM mendaftarkan merek sendiri secara resmi dan tidak meniru merek terdaftar pihak lain, "
+        "agar usaha berkembang sesuai ketentuan perlindungan merek.",
+        "Anjuran peniruan merek dapat dikenai sanksi pidana dan perdata serta merusak citra kelembagaan.",
+    ),
+    (
+        re.compile(r"\bmenyalahi\s+indikasi\s+geografis\b|\bmemalsukan\s+indikasi\s+geografis\b", re.I),
+        "Tinggi",
+        "Draf menyentuh pelanggaran indikasi geografis.",
+        "UU No. 20 Tahun 2016 tentang Merek dan Indikasi Geografis. Perlu verifikasi tim Hukum.",
+        "Gunakan fakta edukasi resmi; jangan menganjurkan penyalahgunaan IG.",
+        "IG dilindungi untuk mencegah penyalahgunaan nama/daerah asal produk.",
     ),
 ]
 
@@ -387,8 +408,10 @@ def _pattern_checks(
             sentence = text[s_start:s_end].strip()
             hapus = text[span_start:span_end]
             tambah = None
-            if risk == "Tinggi" and len(hapus) < 80:
-                tambah = "[kalimat ditinjau ulang Unit Hukum]"
+            if "merek" in problem.lower() and "menyarankan" in sentence.casefold():
+                hapus = sentence.strip()
+                tambah = saran
+                span_start, span_end = s_start, s_end
             found.append(
                 make_finding(
                     s_start,
@@ -402,7 +425,7 @@ def _pattern_checks(
                     reason,
                     span_start=span_start,
                     span_end=span_end,
-                    hapus=hapus if len(hapus) < 120 else sentence,
+                    hapus=hapus,
                     tambah=tambah,
                 )
             )

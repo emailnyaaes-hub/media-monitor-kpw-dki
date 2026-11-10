@@ -94,9 +94,26 @@ class ReviewTests(unittest.TestCase):
                 "",
             )
         text = " ".join(item["masalah"] for item in result["findings"])
-        self.assertIn("review-rules-3", result["method"])
+        self.assertIn("review-rules-4", result["method"])
         self.assertTrue(any(item.get("tambah") for item in result["findings"]))
         self.assertTrue("inflasi" in result["revised"].lower() or any("inflasa" in (item.get("hapus") or "") for item in result["findings"]))
+
+    def test_merek_duplikasi_and_typo_sample(self):
+        with mock.patch.dict(os.environ, {"LLM_API_KEY": ""}):
+            result = review(
+                "Hi Warga DKI Jakarta,\n"
+                "Kami menyarankan untuk melakukan duplikasi merek yang sudah terdaftar agar dapat "
+                "menghasilkan keuntungan yang sebesar-besarnya sehingga UMKM dapat lebih maju dan "
+                "menghasilkaq profit lebih besar.",
+                "siaran",
+                "",
+            )
+        self.assertGreater(len(result["findings"]), 0)
+        self.assertIn("menghasilkan", result["revised"])
+        self.assertNotIn("menghasilkaq", result["revised"].casefold())
+        blob = " ".join(item["masalah"] + item.get("dasar_hukum", "") for item in result["findings"]).lower()
+        self.assertIn("merek", blob)
+        self.assertIn("implikasi_hukum", result["counts"])
 
     def test_wrong_pasal_substance_and_language(self):
         with mock.patch.dict(os.environ, {"LLM_API_KEY": ""}):

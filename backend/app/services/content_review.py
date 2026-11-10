@@ -23,7 +23,7 @@ DISCLAIMER = (
     "Hasil review adalah alat bantu AI dan tidak menggantikan review resmi "
     "oleh Unit Hukum/Kepatuhan."
 )
-REVIEW_RULES_VERSION = "review-rules-3"
+REVIEW_RULES_VERSION = "review-rules-4"
 
 UU_EXPECTED_YEAR = {
     4: 2023,
@@ -54,6 +54,7 @@ REPLACEMENT_BY_FRAGMENT = {
     "menjamin": "berupaya menjaga",
     "mengjamin": "berupaya menjaga",
     "jamin": "berupaya menjaga",
+    "sebesar-besarnya": "optimal sesuai ketentuan",
 }
 RULES = [
     (
@@ -209,6 +210,15 @@ RULES = [
         "undang-undang",
         "Salah ketik pada istilah hukum mengurangi kredibilitas naskah.",
     ),
+    (
+        re.compile(r"\bsebesar-besarnya\b", re.I),
+        "regulasi",
+        "Sedang",
+        "Janji memaksimalkan tanpa batas risiko (frasa «sebesar-besarnya»).",
+        "UU No. 8 Tahun 1999 tentang Perlindungan Konsumen. Perlu verifikasi tim Hukum.",
+        "Ganti dengan «sesuai potensi dan ketentuan yang berlaku».",
+        "Klaim keuntungan maksimal mudah dinilai menyesatkan.",
+    ),
 ]
 
 KATA_BAKU_RULES = [
@@ -241,9 +251,18 @@ KATA_BAKU_RULES = [
     (re.compile(r"\bpemerinath\b", re.I), "pemerintah", "Salah ketik pada kata pemerintah."),
     (re.compile(r"\bdi\s+atur\b", re.I), "diatur", "Kata majemuk 'di-' + 'atur' ditulis serangkai sebagai diatur."),
     (re.compile(r"\bdi\s+atasnamakan\b", re.I), "mengatasnamakan", "Ejaan baku: mengatasnamakan."),
+    (re.compile(r"\bmenghasilkaq\b", re.I), "menghasilkan", "Salah ketik: huruf «q» seharusnya «n»."),
+    (re.compile(r"\bprofit\b", re.I), "keuntungan", "Ragam resmi memakai «keuntungan»."),
 ]
 
+TYPO_Q_PATTERN = re.compile(r"\b([a-z]{4,})kaq\b", re.I)
+
 INFORMAL_RULES = [
+    (
+        re.compile(r"\bHi\s+Warga(?:\s+DKI\s+Jakarta)?,?", re.I),
+        "Salam «Hi Warga» terlalu santai untuk kanal resmi BI/KPw.",
+        "Yth. Warga Jakarta,",
+    ),
     (re.compile(r"\b(dong|nih|deh|sih|banget|wkwk|anjir)\b", re.I), "Hapus kata informal dari kanal resmi.", "Tidak"),
     (re.compile(r"\b(?:BANK INDONESIA|BANK\s+INDONESIA)\b"), "Nama institusi sebaiknya tidak ditulis seluruhnya kapital.", "Bank Indonesia"),
 ]
@@ -298,9 +317,11 @@ def review(text: str, kind: str = "siaran", platform: str = "") -> dict:
         findings.extend(_kata_baku(chunk, chunk_start))
         findings.extend(_kejelasan(chunk, chunk_start))
         findings.extend(_informal(chunk, chunk_start))
+        findings.extend(_typos(chunk, chunk_start))
         findings.extend(_style(chunk, chunk_start, kind, platform))
     findings.extend(_llm(original, findings))
     findings = _dedupe(findings)
+    findings = _dedupe_overlapping(findings)
     revised = apply_all(original, findings)
     score, status = _score(findings)
     return {
@@ -324,21 +345,37 @@ def review(text: str, kind: str = "siaran", platform: str = "") -> dict:
 
 def apply_all(original: str, findings: list[dict]) -> str:
     accepted = [item for item in findings if item.get("accepted", True)]
-    accepted.sort(key=lambda item: item.get("span_start", item["start"]), reverse=True)
+
+    def span_len(item: dict) -> int:
+        return item.get("span_end", item["end"]) - item.get("span_start", item["start"])
+
+    major = [f for f in accepted if f.get("tambah") and span_len(f) >= max(80, len(original) // 3)]
+    minor = [f for f in accepted if f not in major]
     text = original
-    for item in accepted:
-        start = item.get("span_start", item["start"])
-        end = item.get("span_end", item["end"])
-        tambah = item.get("tambah")
-        if tambah is None:
-            if start == item["start"] and end == item["end"]:
-                tambah = item.get("saran") or ""
-            else:
-                continue
-        if tambah == "" and not item.get("hapus"):
-            continue
-        if 0 <= start < end <= len(text):
-            text = text[:start] + tambah + text[end:]
+    applied: list[tuple[int, int]] = []
+    for item in sorted(major, key=lambda i: i.get("span_start", i["start"]), reverse=True):
+        text = _apply_one(text, item, applied)
+    for item in sorted(minor, key=lambda i: i.get("span_start", i["start"]), reverse=True):
+        text = _apply_one(text, item, applied)
+    return text
+
+
+def _apply_one(text: str, item: dict, applied: list[tuple[int, int]]) -> str:
+    start = item.get("span_start", item["start"])
+    end = item.get("span_end", item["end"])
+    if any(start < ae and end > as_ for as_, ae in applied):
+        return text
+    tambah = item.get("tambah")
+    if tambah is None:
+        if start == item["start"] and end == item["end"]:
+            tambah = item.get("saran") or ""
+        else:
+            return text
+    if tambah == "" and not item.get("hapus"):
+        return text
+    if 0 <= start < end <= len(text):
+        text = text[:start] + tambah + text[end:]
+        applied.append((start, end))
     return text
 
 
@@ -451,6 +488,16 @@ def _regulasi_tambah(hapus: str, suggestion: str, sentence: str = "") -> str | N
                 return re.sub(rf"\b{re.escape(key)}\b", repl, sentence, count=1, flags=re.I).strip()
     if fragment == "undang undagan" or "undagan" in fragment:
         return "undang-undang"
+    if "duplikasi merek" in fragment or "meniru merek" in fragment:
+        if sentence:
+            return re.sub(
+                r"\b(duplikasi|menduplikasi|meniru|menyalin|memalsukan)\s+merek\b(?:\s+yang\s+sudah\s+terdaftar)?",
+                "mendaftarkan merek sendiri secara resmi (bukan meniru merek terdaftar)",
+                sentence,
+                count=1,
+                flags=re.I,
+            ).strip()
+        return "mendaftarkan merek sendiri secara resmi"
     return None
 
 
@@ -507,6 +554,39 @@ def _uu_checks(text: str) -> list[dict]:
                         tambah=None,
                     )
                 )
+    return found
+
+
+def _typos(chunk: str, offset: int) -> list[dict]:
+    found = []
+    for match in TYPO_Q_PATTERN.finditer(chunk):
+        word = match.group(0)
+        if word.casefold() == "menghasilkaq":
+            continue
+        span_start = offset + match.start()
+        span_end = offset + match.end()
+        hapus = word
+        tambah = re.sub(r"kaq\b", "kan", hapus, flags=re.I)
+        sentence_start = offset + _sentence_start(chunk, match.start())
+        sentence_end = offset + _sentence_end(chunk, match.end())
+        sentence = chunk[sentence_start - offset : sentence_end - offset].strip()
+        found.append(
+            _finding(
+                sentence_start,
+                sentence_end,
+                sentence,
+                "kata_baku",
+                "Sedang",
+                f"Kemungkinan salah ketik «{hapus}» (akhiran «kaq» tidak lazim dalam bahasa Indonesia).",
+                "Pedoman Umum Ejaan Bahasa Indonesia. Bukan pasal undang-undangan.",
+                sentence.replace(hapus, tambah, 1).strip(),
+                "Salah ketik mengurangi kredibilitas siaran resmi.",
+                span_start=span_start,
+                span_end=span_end,
+                hapus=hapus,
+                tambah=tambah,
+            )
+        )
     return found
 
 
@@ -820,6 +900,28 @@ def _dedupe(findings: list[dict]) -> list[dict]:
         seen.add(key)
         kept.append(item)
     kept.sort(key=lambda item: item["start"])
+    return kept
+
+
+def _risk_rank(risk: str) -> int:
+    return {"Tinggi": 3, "Sedang": 2, "Rendah": 1}.get(risk, 0)
+
+
+def _dedupe_overlapping(findings: list[dict]) -> list[dict]:
+    """Buang temuan yang span-nya tumpang tindih pada narasi sama (sisakan yang paling berat)."""
+    ordered = sorted(findings, key=lambda item: (item.get("span_start", item["start"]), -_risk_rank(item["risiko"])))
+    kept: list[dict] = []
+    for item in ordered:
+        a = item.get("span_start", item["start"])
+        b = item.get("span_end", item["end"])
+        if any(
+            a < k.get("span_end", k["end"]) and b > k.get("span_start", k["start"])
+            and item["kategori"] == k["kategori"]
+            for k in kept
+        ):
+            continue
+        kept.append(item)
+    kept.sort(key=lambda item: item.get("span_start", item["start"]))
     return kept
 
 
