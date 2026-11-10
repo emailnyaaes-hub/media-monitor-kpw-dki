@@ -86,6 +86,42 @@ class ReviewTests(unittest.TestCase):
             )
         self.assertGreater(result["counts"].get("kejelasan", 0), 0)
 
+    def test_typo_and_uu_year_wrong(self):
+        with mock.patch.dict(os.environ, {"LLM_API_KEY": ""}):
+            result = review(
+                "Bank Indonesia menjelaskan undang undagan dan inflasa. Rujukan UU No. 23 Tahun 2020 tentang Bank Indonesia.",
+                "siaran",
+                "",
+            )
+        text = " ".join(item["masalah"] for item in result["findings"])
+        self.assertIn("review-rules-3", result["method"])
+        self.assertTrue(any(item.get("tambah") for item in result["findings"]))
+        self.assertTrue("inflasi" in result["revised"].lower() or any("inflasa" in (item.get("hapus") or "") for item in result["findings"]))
+
+    def test_wrong_pasal_substance_and_language(self):
+        with mock.patch.dict(os.environ, {"LLM_API_KEY": ""}):
+            result = review(
+                "Bank Indonesia menjamin untung pasti menurut Pasal 12 UU No. 8 Tahun 1999. "
+                "Pihak tersebut terbukti bersalah melakukan penipuan dan namanya disebut di sini.",
+                "siaran",
+                "",
+            )
+        cats = {item["kategori"] for item in result["findings"]}
+        self.assertIn("implikasi_hukum", cats)
+        blob = " ".join(item["masalah"] for item in result["findings"])
+        self.assertTrue("Implikasi hukum" in blob or "tidak selaras" in blob or "menuding" in blob)
+
+    def test_pasal_and_menjamin(self):
+        with mock.patch.dict(os.environ, {"LLM_API_KEY": ""}):
+            result = review(
+                "Bank Indonesia menjamin investasi Anda aman sepasal Pasal 12 ayat (3) UU No. 8 Tahun 1999.",
+                "siaran",
+                "",
+            )
+        cats = {item["risiko"] for item in result["findings"]}
+        self.assertIn("Tinggi", cats)
+        self.assertLess(result["score"], 85)
+
 
 if __name__ == "__main__":
     unittest.main()

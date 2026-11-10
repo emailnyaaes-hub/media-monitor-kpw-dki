@@ -51,11 +51,12 @@ const KATEGORI_LABEL: Record<string, string> = {
   kata_baku: 'Kata baku',
   kejelasan: 'Kejelasan',
   reputasi: 'Reputasi kebijakan',
+  implikasi_hukum: 'Implikasi hukum',
   ambigu: 'Kejelasan',
   gaya: 'Kata baku',
 }
 
-const FILTER_TABS = ['semua', 'regulasi', 'kata_baku', 'kejelasan'] as const
+const FILTER_TABS = ['semua', 'regulasi', 'implikasi_hukum', 'kata_baku', 'kejelasan'] as const
 type FilterTab = (typeof FILTER_TABS)[number]
 
 export default function ReviewPage() {
@@ -223,7 +224,7 @@ export default function ReviewPage() {
             <p className="text-sm">{result.disclaimer}</p>
             <p className="mt-2 text-2xl font-bold">{result.score}<span className="text-base font-normal text-muted"> / 100 · {result.status}</span></p>
             <p className="mt-1 text-sm text-muted">
-              UU / regulasi {result.counts.regulasi || 0} · Kata baku {result.counts.kata_baku || 0} · Kejelasan {result.counts.kejelasan || 0}
+              UU / regulasi {result.counts.regulasi || 0} · Implikasi hukum {result.counts.implikasi_hukum || 0} · Kata baku {result.counts.kata_baku || 0} · Kejelasan {result.counts.kejelasan || 0}
               {(result.counts.reputasi || 0) > 0 ? ` · Reputasi ${result.counts.reputasi}` : ''}
               {result.method ? ` · ${result.method}` : ''}
             </p>
@@ -321,7 +322,8 @@ function Highlighted({ text, findings }: { text: string; findings: Finding[] }) 
     const cat = normalizeKategori(item.kategori)
     const className =
       item.risiko === 'Tinggi' ? 'bg-red-200'
-        : cat === 'regulasi' ? 'bg-violet-200'
+        : cat === 'implikasi_hukum' ? 'bg-rose-200'
+          : cat === 'regulasi' ? 'bg-violet-200'
           : cat === 'kata_baku' ? 'bg-sky-200'
             : 'bg-amber-200'
     pieces.push({ text: text.slice(item.start, item.end), className })

@@ -1,7 +1,8 @@
 """Pemeriksa draf siaran pers dan caption.
 
-Tanpa LLM_API_KEY, temuan berasal dari aturan kata. Nomor pasal tidak
-ditulis. Nama peraturan disertai catatan verifikasi tim Hukum.
+Tanpa LLM_API_KEY, temuan berasal dari aturan kata, katalog pasal indikatif,
+dan pola implikasi hukum substansi/bahasa. Nama peraturan disertai catatan
+verifikasi tim Hukum.
 Jika kunci ada, model boleh menambah temuan, tetapi setiap "Pasal N"
 diganti menjadi catatan verifikasi.
 """
@@ -15,12 +16,45 @@ from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from app.nlp.bi_style import BI_REVIEW_SUFFIX, BI_VOICE_GUIDE
+from app.services import content_review_legal
 from app.services.dss_llm import _complete, _parse_json
 
 DISCLAIMER = (
     "Hasil review adalah alat bantu AI dan tidak menggantikan review resmi "
     "oleh Unit Hukum/Kepatuhan."
 )
+REVIEW_RULES_VERSION = "review-rules-3"
+
+UU_EXPECTED_YEAR = {
+    4: 2023,
+    8: 1999,
+    11: 2008,
+    13: 2016,
+    14: 2008,
+    19: 2016,
+    20: 2016,
+    23: 1999,
+    27: 2022,
+    28: 2014,
+    31: 2000,
+}
+
+REPLACEMENT_BY_FRAGMENT = {
+    "dipastikan": "sesuai keputusan yang telah diumumkan secara resmi",
+    "pasti akan": "dapat",
+    "akan menurunkan suku bunga": "kebijakan suku bunga mengacu pada rilis resmi Bank Indonesia",
+    "akan menaikkan suku bunga": "kebijakan suku bunga mengacu pada rilis resmi Bank Indonesia",
+    "sinyal pelonggaran": "pembacaan pasar terhadap kebijakan yang telah diumumkan",
+    "sinyal pengetatan": "pembacaan pasar terhadap kebijakan yang telah diumumkan",
+    "terbaik": "sesuai ketentuan yang berlaku",
+    "satu-satunya": "salah satu",
+    "dijamin untung": "prospek mengikuti informasi resmi",
+    "paling aman": "relatif stabil menurut data resmi",
+    "tanpa risiko": "dengan risiko sebagaimana dijelaskan resmi",
+    "menjamin": "berupaya menjaga",
+    "mengjamin": "berupaya menjaga",
+    "jamin": "berupaya menjaga",
+}
 RULES = [
     (
         re.compile(r"\b\d{16}\b"),
@@ -103,6 +137,78 @@ RULES = [
         "Pastikan nama UU tepat dan tidak disertai interpretasi hukum yang belum disetujui Unit Hukum.",
         "Menyebut UU tanpa peninjauan dapat menimbulkan salah tafsir ketentuan.",
     ),
+    (
+        re.compile(r"\bPasal\s+\d+[A-Za-z]?(?:\s+ayat\s*\([^)]+\))?", re.I),
+        "regulasi",
+        "Tinggi",
+        "Nomor pasal undang-undang ditulis pada draf yang akan dipublikasikan.",
+        "Rujukan peraturan perundang-undangan. Pasal tidak disebut. Perlu verifikasi tim Hukum.",
+        "Hapus nomor pasal; gunakan rujukan umum atau kutipan yang sudah disahkan Unit Hukum.",
+        "Menyebut pasal tanpa konteks hukum lengkap berisiko salah tafsir di kanal publik.",
+    ),
+    (
+        re.compile(r"\bBank Indonesia\s+(menjamin|mengjamin|jamin)\b", re.I),
+        "regulasi",
+        "Tinggi",
+        "Kalimat berbunyi jaminan mutlak atas hasil atau layanan.",
+        "UU No. 8 Tahun 1999 tentang Perlindungan Konsumen. Pasal tidak disebut. Perlu verifikasi tim Hukum.",
+        "Ganti dengan pernyataan faktual tanpa janji hasil pasti.",
+        "Janji jaminan mudah dibaca sebagai promosi yang tidak seimbang.",
+    ),
+    (
+        re.compile(r"\b(BI|Bank Indonesia)\s+(mencetak|nyetak|membagikan|bagikan)\s+uang\b", re.I),
+        "reputasi",
+        "Tinggi",
+        "Narasi mencetak atau membagikan uang untuk publik tidak sesuai fungsi BI.",
+        "UU No. 23 Tahun 1999 tentang Bank Indonesia sebagaimana diubah. Pasal tidak disebut. Perlu verifikasi tim Hukum.",
+        "Hapus narasi tersebut; gunakan penjelasan mandat BI yang sudah disetujui Kehumasan.",
+        "Klaim ini mengikuti pola hoaks yang mengancam kredibilitas institusi.",
+    ),
+    (
+        re.compile(r"(?<!jangan\s)(?<!tidak\s)\b(mengatasnamakan|di atasnamakan)\s+(BI|Bank Indonesia)\b", re.I),
+        "regulasi",
+        "Tinggi",
+        "Frasa mengatasnamakan BI tanpa konteks larangan atau fakta resmi.",
+        "UU No. 19 Tahun 2016 tentang Perubahan atas UU No. 11 Tahun 2008 tentang ITE. Pasal tidak disebut. Perlu verifikasi tim Hukum.",
+        "Gunakan fakta resmi; bila edukasi anti-penipuan, nyatakan «jangan percaya pihak yang mengatasnamakan Bank Indonesia».",
+        "Publikasi BI tidak boleh membenarkan narasi yang terlihat mendukung penyalahgunaan nama BI.",
+    ),
+    (
+        re.compile(r"\b(BI|Bank Indonesia)\s+(akan\s+)?(menurunkan|menaikkan|memotong)\s+(suku\s+bunga|BI-Rate)\b", re.I),
+        "reputasi",
+        "Tinggi",
+        "Kalimat memuat arahan suku bunga yang belum menjadi rilis resmi.",
+        "UU No. 23 Tahun 1999 tentang Bank Indonesia. Pasal tidak disebut. Perlu verifikasi tim Hukum.",
+        "Kutip keputusan kebijakan moneter yang sudah diumumkan, tanpa prakiraan arah.",
+        "Sinyal kebijakan yang belum rilis dapat menggerakkan ekspektasi pasar.",
+    ),
+    (
+        re.compile(r"\b(undian|giveaway|hadiah\s+uang)\b.*\b(BI|Bank Indonesia)\b", re.I | re.S),
+        "regulasi",
+        "Tinggi",
+        "Draf mengaitkan undian atau hadiah dengan nama BI.",
+        "UU No. 19 Tahun 2016 tentang ITE dan UU No. 8 Tahun 1999 tentang Perlindungan Konsumen. Pasal tidak disebut. Perlu verifikasi tim Hukum.",
+        "Hapus seluruh promosi undian; ingatkan publik pada kanal resmi BI.",
+        "Pola penipuan umum memakai nama BI untuk undian palsu.",
+    ),
+    (
+        re.compile(r"\b(BI|Bank Indonesia)\s+(menganjurkan|menyarankan)\s+(membeli|berinvestasi|investasi)\b", re.I),
+        "regulasi",
+        "Tinggi",
+        "Draf tampak memberi nasihat investasi atas nama BI.",
+        "UU No. 8 Tahun 1999 tentang Perlindungan Konsumen. Pasal tidak disebut. Perlu verifikasi tim Hukum.",
+        "Ganti dengan edukasi netral tanpa ajakan alokasi investasi tertentu.",
+        "Nasihat investasi menambah risiko perlindungan konsumen dan reputasi.",
+    ),
+    (
+        re.compile(r"\bundang[-\s]?undagan\b", re.I),
+        "kata_baku",
+        "Sedang",
+        "Ejaan «undang undagan» tidak baku.",
+        "Pedoman Umum Ejaan Bahasa Indonesia. Bukan pasal undang-undangan.",
+        "undang-undang",
+        "Salah ketik pada istilah hukum mengurangi kredibilitas naskah.",
+    ),
 ]
 
 KATA_BAKU_RULES = [
@@ -119,6 +225,27 @@ KATA_BAKU_RULES = [
     (re.compile(r"\bdownload\b", re.I), "unduh", "KBBI merekomendasikan 'unduh'."),
     (re.compile(r"\bupload\b", re.I), "unggah", "KBBI merekomendasikan 'unggah'."),
     (re.compile(r"\bsharing\b", re.I), "berbagi", "Gunakan padanan Indonesia 'berbagi' atau 'membagikan'."),
+    (re.compile(r"\binflasa\b", re.I), "inflasi", "KBBI: inflasi."),
+    (re.compile(r"\bmonetair\b", re.I), "moneter", "Istilah BI: kebijakan moneter."),
+    (re.compile(r"\bkebijakan\s+monter\b", re.I), "kebijakan moneter", "Istilah resmi BI."),
+    (re.compile(r"\bstabilititas\b", re.I), "stabilitas", "KBBI: stabilitas."),
+    (re.compile(r"\bbelom\b", re.I), "belum", "KBBI: belum."),
+    (re.compile(r"\btidka\b", re.I), "tidak", "Salah ketik umum."),
+    (re.compile(r"\btdak\b", re.I), "tidak", "Salah ketik umum."),
+    (re.compile(r"\bkalo\b", re.I), "kalau", "Ragam resmi: kalau."),
+    (re.compile(r"\butk\b", re.I), "untuk", "Singkatan tidak digunakan pada siaran resmi."),
+    (re.compile(r"\bdgn\b", re.I), "dengan", "Singkatan tidak digunakan pada siaran resmi."),
+    (re.compile(r"\bgak\b", re.I), "tidak", "Ragam informal."),
+    (re.compile(r"\bngga\b", re.I), "tidak", "Ragam informal."),
+    (re.compile(r"\bpemeirntah\b", re.I), "pemerintah", "Salah ketik pada kata pemerintah."),
+    (re.compile(r"\bpemerinath\b", re.I), "pemerintah", "Salah ketik pada kata pemerintah."),
+    (re.compile(r"\bdi\s+atur\b", re.I), "diatur", "Kata majemuk 'di-' + 'atur' ditulis serangkai sebagai diatur."),
+    (re.compile(r"\bdi\s+atasnamakan\b", re.I), "mengatasnamakan", "Ejaan baku: mengatasnamakan."),
+]
+
+INFORMAL_RULES = [
+    (re.compile(r"\b(dong|nih|deh|sih|banget|wkwk|anjir)\b", re.I), "Hapus kata informal dari kanal resmi.", "Tidak"),
+    (re.compile(r"\b(?:BANK INDONESIA|BANK\s+INDONESIA)\b"), "Nama institusi sebaiknya tidak ditulis seluruhnya kapital.", "Bank Indonesia"),
 ]
 
 KEJELASAN_PATTERNS = [
@@ -148,16 +275,29 @@ KEJELASAN_PATTERNS = [
     ),
 ]
 
+KEJELASAN_TAMBAH = {
+    "dll": "misalnya [sebutkan secara eksplisit]",
+    "dll.": "misalnya [sebutkan secara eksplisit]",
+    "dan sebagainya": "[sebutkan item yang dimaksud]",
+    "dan lain-lain": "[sebutkan item yang dimaksud]",
+    "segera": "pada [tanggal/periode yang disetujui]",
+    "secepatnya": "pada [tanggal/periode yang disetujui]",
+    "dalam waktu dekat": "pada [tanggal/periode yang disetujui]",
+}
+
 
 def review(text: str, kind: str = "siaran", platform: str = "") -> dict:
     original = (text or "").strip()
     if len(original) < 20:
         return _empty("Teks terlalu pendek untuk ditinjau.")
     findings = []
+    findings.extend(content_review_legal.analyze(original, _finding))
+    findings.extend(_uu_checks(original))
     for chunk_start, chunk in _chunks(original):
         findings.extend(_rules(chunk, chunk_start))
         findings.extend(_kata_baku(chunk, chunk_start))
         findings.extend(_kejelasan(chunk, chunk_start))
+        findings.extend(_informal(chunk, chunk_start))
         findings.extend(_style(chunk, chunk_start, kind, platform))
     findings.extend(_llm(original, findings))
     findings = _dedupe(findings)
@@ -174,7 +314,11 @@ def review(text: str, kind: str = "siaran", platform: str = "") -> dict:
         "status": status,
         "counts": _counts(findings),
         "track": track_changes_view(original, findings),
-        "method": "aturan" if not os.environ.get("LLM_API_KEY", "").strip() else "aturan+model",
+        "method": (
+            f"aturan-{REVIEW_RULES_VERSION}"
+            if not os.environ.get("LLM_API_KEY", "").strip()
+            else f"aturan+model-{REVIEW_RULES_VERSION}"
+        ),
     }
 
 
@@ -278,7 +422,7 @@ def _rules(chunk: str, offset: int) -> list[dict]:
             sentence_end = offset + _sentence_end(chunk, match.end())
             sentence = chunk[sentence_start - offset:sentence_end - offset].strip()
             hapus = chunk[match.start():match.end()]
-            tambah = _regulasi_tambah(hapus, suggestion)
+            tambah = _regulasi_tambah(hapus, suggestion, sentence)
             found.append(_finding(
                 sentence_start, sentence_end, sentence, category, risk, problem, legal, suggestion, reason,
                 span_start=span_start, span_end=span_end, hapus=hapus, tambah=tambah,
@@ -286,14 +430,129 @@ def _rules(chunk: str, offset: int) -> list[dict]:
     return found
 
 
-def _regulasi_tambah(hapus: str, suggestion: str) -> str | None:
+def _regulasi_tambah(hapus: str, suggestion: str, sentence: str = "") -> str | None:
     lower = suggestion.lower()
-    if "hapus" in lower and "nomor" in lower:
+    if "hapus" in lower and any(word in lower for word in ("nomor", "kalimat", "narasi", "penanda", "promosi", "seluruh")):
+        if hapus and sentence and hapus in sentence:
+            revised = sentence.replace(hapus, "", 1)
+            revised = re.sub(r"\s+", " ", revised).strip()
+            return revised if revised else ""
         return ""
     if re.fullmatch(r"[\w.+-]+@[\w.-]+\.\w+", hapus or ""):
         return "saluran resmi Bank Indonesia"
     if re.fullmatch(r"\b\d{16}\b", hapus or ""):
         return ""
+    fragment = (hapus or "").strip().casefold()
+    if fragment in REPLACEMENT_BY_FRAGMENT:
+        return REPLACEMENT_BY_FRAGMENT[fragment]
+    if sentence and hapus:
+        for key, repl in sorted(REPLACEMENT_BY_FRAGMENT.items(), key=lambda item: -len(item[0])):
+            if re.search(rf"\b{re.escape(key)}\b", hapus, flags=re.I):
+                return re.sub(rf"\b{re.escape(key)}\b", repl, sentence, count=1, flags=re.I).strip()
+    if fragment == "undang undagan" or "undagan" in fragment:
+        return "undang-undang"
+    return None
+
+
+def _uu_checks(text: str) -> list[dict]:
+    found = []
+    patterns = [
+        re.compile(r"\b(?:UU|Undang-Undang)\s*(?:No\.?|Nomor)?\s*(\d+)\s*(?:Tahun|Th\.?)\s*(\d{4})\b", re.I),
+        re.compile(r"\bUU\s*(\d+)\s*/\s*(\d{4})\b", re.I),
+    ]
+    for pattern in patterns:
+        for match in pattern.finditer(text):
+            num = int(match.group(1))
+            year = int(match.group(2))
+            span_start, span_end = match.start(), match.end()
+            hapus = match.group(0)
+            sentence_start = _sentence_start(text, match.start())
+            sentence_end = _sentence_end(text, match.end())
+            sentence = text[sentence_start:sentence_end].strip()
+            expected = UU_EXPECTED_YEAR.get(num)
+            if expected and year != expected:
+                correct = f"UU No. {num} Tahun {expected}"
+                found.append(
+                    _finding(
+                        sentence_start,
+                        sentence_end,
+                        sentence,
+                        "regulasi",
+                        "Tinggi",
+                        f"Tahun UU No. {num} tercantum {year}; rujukan resmi memakai Tahun {expected}.",
+                        "Rujukan peraturan perundang-undangan. Pasal tidak disebut. Perlu verifikasi tim Hukum.",
+                        correct,
+                        "Salah tahun undang-undang dapat mengacaukan interpretasi hukum di kanal publik.",
+                        span_start=span_start,
+                        span_end=span_end,
+                        hapus=hapus,
+                        tambah=correct,
+                    )
+                )
+            elif num not in UU_EXPECTED_YEAR:
+                found.append(
+                    _finding(
+                        sentence_start,
+                        sentence_end,
+                        sentence,
+                        "regulasi",
+                        "Sedang",
+                        f"UU No. {num} belum ada di katalog internal; konfirmasi nama dan tahun dengan Unit Hukum.",
+                        "Rujukan peraturan perundang-undangan. Pasal tidak disebut. Perlu verifikasi tim Hukum.",
+                        "Periksa kutipan UU pada database peraturan resmi sebelum terbit.",
+                        "Kutipan UU yang tidak diverifikasi berisiko tidak akurat.",
+                        span_start=span_start,
+                        span_end=span_end,
+                        hapus=hapus,
+                        tambah=None,
+                    )
+                )
+    return found
+
+
+def _informal(chunk: str, offset: int) -> list[dict]:
+    found = []
+    for pattern, problem, tambah in INFORMAL_RULES:
+        for match in pattern.finditer(chunk):
+            span_start = offset + match.start()
+            span_end = offset + match.end()
+            hapus = chunk[match.start():match.end()]
+            sentence_start = offset + _sentence_start(chunk, match.start())
+            sentence_end = offset + _sentence_end(chunk, match.end())
+            sentence = chunk[sentence_start - offset : sentence_end - offset].strip()
+            suggestion = sentence.replace(hapus, tambah, 1) if tambah != "Hapus kata informal dari kanal resmi." else re.sub(pattern, "", sentence, count=1).strip()
+            suggestion = re.sub(r"\s+", " ", suggestion).strip(" ,")
+            found.append(
+                _finding(
+                    sentence_start,
+                    sentence_end,
+                    sentence,
+                    "kata_baku",
+                    "Sedang",
+                    problem,
+                    "Pedoman bahasa Indonesia. Bukan pasal undang-undangan.",
+                    suggestion or problem,
+                    "Kanal Bank Indonesia memakai ragam formal.",
+                    span_start=span_start,
+                    span_end=span_end,
+                    hapus=hapus,
+                    tambah=tambah if tambah != "Hapus kata informal dari kanal resmi." else "",
+                )
+            )
+    return found
+
+
+def _locate_sentence(original: str, sentence: str) -> int | None:
+    if not sentence:
+        return None
+    if sentence in original:
+        return original.find(sentence)
+    needle = re.sub(r"\s+", " ", sentence).strip()
+    hay = re.sub(r"\s+", " ", original)
+    if needle in hay:
+        probe = sentence[: min(48, len(sentence))].strip()
+        pos = original.find(probe)
+        return pos if pos >= 0 else None
     return None
 
 
@@ -329,13 +588,18 @@ def _kejelasan(chunk: str, offset: int) -> list[dict]:
             sentence_start = offset + _sentence_start(chunk, match.start())
             sentence_end = offset + _sentence_end(chunk, match.end())
             sentence = chunk[sentence_start - offset:sentence_end - offset].strip()
+            key = hapus.casefold().strip().rstrip(".")
+            tambah = KEJELASAN_TAMBAH.get(key) or KEJELASAN_TAMBAH.get(hapus.casefold().strip())
+            saran = suggestion
+            if tambah and hapus in sentence:
+                saran = sentence.replace(hapus, tambah, 1).strip()
             found.append(_finding(
                 sentence_start, sentence_end, sentence, "kejelasan", "Sedang",
                 problem,
                 "Pedoman komunikasi yang jelas. Bukan pasal undang-undangan. Perlu verifikasi tim Hukum bila menyangkut substansi.",
-                suggestion,
+                saran,
                 reason,
-                span_start=span_start, span_end=span_end, hapus=hapus, tambah=None,
+                span_start=span_start, span_end=span_end, hapus=hapus, tambah=tambah,
             ))
     return found
 
@@ -401,9 +665,11 @@ def _llm(original: str, existing: list[dict]) -> list[dict]:
     system = (
         f"{BI_VOICE_GUIDE}\n\n{BI_REVIEW_SUFFIX}\n\n"
         "Anda reviewer komunikasi Bank Indonesia. Balas JSON {\"findings\": [...]} . "
-        "Periksa: (1) regulasi perundang-undangan—acu UU bila relevan tanpa nomor pasal; "
-        "(2) kata baku Bahasa Indonesia; (3) kejelasan dan ketepatan kata. "
+        "Periksa: (1) regulasi—UU/pasal benar dan relevan substansi; "
+        "(2) implikasi pelanggaran hukum pada isi dan pilihan kata/bahasa; "
+        "(3) kata baku; (4) kejelasan. "
         "Prioritaskan temuan KRITIS yang menghalangi terbit. "
+        "Kategori implikasi_hukum untuk risiko pidana, fitnah, kutipan pasal keliru, dan bahasa yang mengikat secara hukum. "
         "Setiap temuan: kalimat, kategori (regulasi|kata_baku|kejelasan|reputasi), risiko, masalah, dasar_hukum, "
         "saran (teks pengganti ragam siaran pers BI), alasan (dampak hukum/reputasi/persepsi), "
         "opsional hapus/tambah untuk track changes. "
@@ -419,9 +685,12 @@ def _llm(original: str, existing: list[dict]) -> list[dict]:
         if not isinstance(item, dict):
             continue
         sentence = str(item.get("kalimat") or item.get("sentence") or "").strip()
-        if not sentence or sentence not in original:
+        if not sentence:
             continue
-        start = original.find(sentence)
+        start = _locate_sentence(original, sentence)
+        if start is None:
+            continue
+        end = start + len(sentence)
         legal = _no_pasal(str(item.get("dasar_hukum") or "Perlu verifikasi tim Hukum."))
         hapus = item.get("hapus")
         tambah = item.get("tambah")
@@ -457,6 +726,8 @@ def _normalize_category(category: str) -> str:
         return "kata_baku"
     if raw in {"kejelasan", "ambigu", "ketepatan"}:
         return "kejelasan"
+    if raw in {"implikasi_hukum", "implikasi", "hukum"}:
+        return "implikasi_hukum"
     return "kejelasan"
 
 
@@ -570,7 +841,7 @@ def _score(findings: list[dict]) -> tuple[int, str]:
 
 
 def _counts(findings: list[dict]) -> dict:
-    counts = {"regulasi": 0, "kata_baku": 0, "kejelasan": 0, "reputasi": 0}
+    counts = {"regulasi": 0, "kata_baku": 0, "kejelasan": 0, "reputasi": 0, "implikasi_hukum": 0}
     for item in findings:
         cat = _normalize_category(item.get("kategori", ""))
         counts[cat] = counts.get(cat, 0) + 1
