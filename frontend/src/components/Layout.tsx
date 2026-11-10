@@ -1,10 +1,10 @@
-import { AlertTriangle, Bell, LogOut, Menu, Moon, Search, Settings, Sun, X } from 'lucide-react'
+import { Bell, LogOut, Menu, Moon, Search, Settings, Sun, X } from 'lucide-react'
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, useApi } from '../api'
 import { useAuth } from '../auth'
 import { useFilters } from '../filters'
-import { formatDay, formatWhen, PLATFORM_LABEL } from '../format'
+import { formatDay, PLATFORM_LABEL } from '../format'
 import { useTheme } from '../theme'
 import type { AlertItem } from '../types'
 import { BiLogo, Copyright, Logo, UNIT } from './Logo'
@@ -15,11 +15,8 @@ const NAV = [
   { to: '/isu', label: 'Isu & Tren' },
   { to: '/review', label: 'Review Konten' },
   { to: '/suara', label: 'Suara Publik' },
-  { to: '/solusi', label: 'Keluhan ke Solusi' },
-  { to: '/alat', label: 'Peta Tools' },
   { to: '/saran', label: 'Rekomendasi' },
   { to: '/explorer', label: 'Jelajah Berita' },
-  { to: '/laporan', label: 'Laporan' },
 ]
 
 const CATEGORIES = [
@@ -298,132 +295,34 @@ function readViews(): SavedView[] {
   }
 }
 
-interface ConnectorStatus {
-  name: string
-  status: string
-  message: string
-  found: number
-  added: number
-  finished_at: string
-}
-
-interface IngestStatus {
-  last_updated: string | null
-  next_update: string | null
-  schedule?: string
-  needs_refresh?: boolean
-  running: boolean
-  connectors: ConnectorStatus[]
-}
-
 function RefreshBar() {
   const { user } = useAuth()
-  const status = useApi<IngestStatus>('/api/ingest/status')
   const [busy, setBusy] = useState(false)
-  const [note, setNote] = useState('')
-  const autoTried = useRef(false)
-  const data = status.data
-  const stale = isStale(data?.last_updated || null) || Boolean(data?.needs_refresh)
-  const failed = data?.connectors.filter((item) => item.status === 'gagal' || item.status === 'timeout') || []
+  const canRefresh = user?.role === 'admin' || user?.role === 'analis'
+  if (!canRefresh) return null
 
-  async function refresh(auto = false) {
+  async function refresh() {
     setBusy(true)
-    setNote(auto ? 'Memperbarui otomatis dari RSS media terpercaya…' : 'Mengambil RSS Detik, Antara, CNN, Tempo, dan sumber langsung…')
     try {
-      const result = await api<{ status?: string; added?: number; error?: string; mode?: string; message?: string }>('/api/jobs/ingest?mode=cepat&wait=true', { method: 'POST' })
-      if (result.status === 'gagal') {
-        setNote(result.error || 'Pembaruan gagal')
-        setBusy(false)
-        return
-      }
-      if (result.status === 'selesai') {
-        setNote(`Selesai (${result.mode || 'cepat'}). Item baru: ${result.added ?? 0}.`)
-        setBusy(false)
-        status.reload()
-        return
-      }
-      setNote(result.status === 'sedang_berjalan' ? 'Pembaruan lain masih berjalan. Menunggu…' : 'Pengambilan dimulai. Menunggu sumber selesai…')
-      for (let i = 0; i < 24; i += 1) {
-        await new Promise((resolve) => window.setTimeout(resolve, 4000))
-        status.reload()
-        const latest = await api<IngestStatus>('/api/ingest/status')
-        if (!latest.running) {
-          setNote(`Selesai. Terakhir diperbarui: ${latest.last_updated ? formatWhen(latest.last_updated) + ' WIB' : 'baru saja'}.`)
-          setBusy(false)
-          status.reload()
-          return
-        }
-      }
-      setNote('Pengambilan masih berjalan di server. Periksa lagi dalam satu menit.')
-    } catch (err) {
-      setNote(err instanceof Error ? err.message : 'Pembaruan gagal')
+      await api('/api/jobs/ingest?mode=cepat&wait=true', { method: 'POST' })
+    } catch {
+      /* UI tetap sederhana */
     } finally {
       setBusy(false)
+      window.location.reload()
     }
   }
 
-  useEffect(() => {
-    const canAuto = user?.role === 'admin' || user?.role === 'analis'
-    if (!canAuto || !stale || busy || data?.running || autoTried.current || !data) return
-    autoTried.current = true
-    void refresh(true)
-  }, [user?.role, stale, busy, data?.running, data])
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      autoTried.current = false
-      status.reload()
-    }, 2 * 60 * 60 * 1000)
-    return () => window.clearInterval(timer)
-  }, [])
-
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line px-4 py-2 text-sm text-muted">
-      <span>Terakhir diperbarui: {data?.last_updated ? `${formatWhen(data.last_updated)} WIB` : 'belum ada'}</span>
-      <span>Berikutnya: {data?.next_update ? `${formatWhen(data.next_update)} WIB` : 'menunggu penjadwal'}{data?.schedule ? ` · otomatis ${data.schedule}` : ''}</span>
-      {stale && (
-        <span className="inline-flex items-center gap-1 text-amber-800 dark:text-amber-200">
-          <AlertTriangle size={14} aria-hidden />
-          Data lebih dari 2 jam. Angka di layar memakai pembaruan terakhir.
-        </span>
-      )}
-      {data?.running && <span>Pengambilan sedang berjalan</span>}
-      <details>
-        <summary className="cursor-pointer">
-          {failed.length ? `Sumber: ${failed.length} gagal` : 'Sumber: terkini'}
-        </summary>
-        <ul className="mt-1 max-w-3xl space-y-1">
-          {data?.connectors.map((item) => (
-            <li key={item.name}>
-              <span className="text-ink">{item.name}</span>
-              {' · '}
-              {item.status === 'berhasil'
-                ? `berhasil, item baru ${item.added}`
-                : item.status === 'tidak_tersedia'
-                  ? `${item.name}: dilewati (belum diintegrasikan).`
-                  : `Sumber ${item.name} gagal diperbarui ${formatWhen(item.finished_at)} WIB. Data lama tetap ditampilkan.`}
-            </li>
-          ))}
-          {!data?.connectors.length && <li>Status sumber belum ada.</li>}
-        </ul>
-      </details>
-      {user?.role === 'admin' && (
-        <button className="no-briefing h-9 rounded-md bg-navy-900 px-2 text-white disabled:opacity-60" disabled={busy} onClick={() => void refresh(false)}>
-          {busy ? 'Memperbarui...' : 'Perbarui sekarang'}
-        </button>
-      )}
-      {note && <span className="text-ink">{note}</span>}
-      {failed.length > 0 && <span className="sr-only">{failed.length} sumber gagal</span>}
+    <div className="flex justify-end border-t border-line px-4 py-2 md:px-6">
+      <button
+        type="button"
+        className="no-briefing h-9 rounded-md bg-navy-900 px-4 text-sm text-white disabled:opacity-60"
+        disabled={busy}
+        onClick={() => void refresh()}
+      >
+        {busy ? 'Memperbarui…' : 'Perbarui'}
+      </button>
     </div>
   )
-}
-
-function isStale(iso: string | null) {
-  if (!iso) return false
-  const [date, time] = iso.split('T')
-  if (!date) return false
-  const [year, month, day] = date.split('-').map(Number)
-  const [hour, minute] = (time || '00:00').split(':')
-  const stamp = new Date(year, (month || 1) - 1, day || 1, Number(hour), Number(minute))
-  return Date.now() - stamp.getTime() > 2 * 60 * 60 * 1000
 }

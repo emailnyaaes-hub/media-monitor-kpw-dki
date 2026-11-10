@@ -64,13 +64,23 @@ class ChartInsightTests(unittest.TestCase):
         self.assertIn("pimpinan", result["now_what"])
         self.assertTrue(result["evidence"])
         self.assertTrue(all(item["url"].startswith("https://") for item in result["evidence"]))
-        self.assertIn("insight-bi-1", result["method"])
-        self.assertIn("Bank Indonesia", result["what_happened"])
+        self.assertIn("insight-bi-2", result["method"])
+        self.assertIn("komposisi sentimen", result["what_happened"].casefold())
 
     def test_trend_without_previous_period_says_so(self):
         with patched(sample(12), []), mock.patch.dict(os.environ, {"LLM_API_KEY": ""}):
             result = chart_insight.generate(None, WINDOW, "trend")
         self.assertIn("belum bisa dihitung", result["what_happened"])
+        self.assertIn("Ringkasan eksekutif", result["what_happened"])
+
+    def test_trend_and_kata_voices_differ(self):
+        rows = [row(f"Rupiah melemah terhadap dolar {index}", minutes=index * 60, source_name=f"Media {index % 4}", reach_estimate=0) for index in range(8)]
+        with patched(rows, []), mock.patch.dict(os.environ, {"LLM_API_KEY": ""}):
+            trend = chart_insight.generate(None, WINDOW, "trend")
+            kata = chart_insight.generate(None, WINDOW, "kata")
+        self.assertIn("Ringkasan eksekutif", trend["what_happened"])
+        self.assertIn("Isu & tren", kata["what_happened"])
+        self.assertNotEqual(trend["what_happened"][:80], kata["what_happened"][:80])
 
     def test_top_word_insight_cites_rows_with_that_word(self):
         rows = [row(f"Rupiah melemah terhadap dolar {index}", minutes=index * 60, source_name=f"Media {index % 4}", reach_estimate=0) for index in range(6)]

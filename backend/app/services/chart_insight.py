@@ -37,7 +37,7 @@ THIN = (
     "Bank Indonesia/KPw BI DKI Jakarta disarankan menunda rekomendasi hingga ambang sumber terpenuhi."
 )
 WATCH_NEGATIVE = 25.0
-INSIGHT_VERSION = "insight-bi-1"
+INSIGHT_VERSION = "insight-bi-2"
 
 SYSTEM_PROMPT = f"""Anda membantu tim Kehumasan/KPw BI membaca satu grafik dashboard media monitor.
 Tulis komprehensif dan actionable untuk rapat pantauan, ragam bahasa Bank Indonesia.
@@ -299,7 +299,7 @@ def _suara(db: Session, window: dict, topic: str, segment: str, area: str) -> di
         so += f" Terdapat {len(members['hoaks'])} konten berpola hoaks — risiko kredibilitas kanal resmi Bank Indonesia."
         now = "KRITIS: verifikasi hoaks dengan Unit Hukum; siapkan klarifikasi kanal resmi dalam 24 jam setelah fakta lengkap."
     elif dominant == "keluhan":
-        now = f"Koordinasi unit terkait topik {main_topic} (matriks Keluhan ke Solusi). Sampaikan persepsi, bukan perubahan kebijakan moneter."
+        now = f"Koordinasi unit terkait topik {main_topic} untuk merespons keluhan publik. Sampaikan persepsi, bukan perubahan kebijakan moneter."
     elif dominant == "kebutuhan":
         now = f"Siapkan bahan edukasi {main_topic} ragam BI untuk ditinjau Kehumasan/KPw sebelum dipublikasikan."
     else:
@@ -348,39 +348,111 @@ def _cap(level: str, no_baseline: bool) -> str:
     return "Sedang" if no_baseline and level == "Tinggi" else level
 
 
+_THIN_NOW = (
+    "Tunda rekomendasi komunikasi. Perluas rentang tanggal atau perbarui data, lalu ulangi Generate Insight "
+    "setelah ambang sumber terpenuhi."
+)
+
+
+def _voice_trend(what: str, so: str, now: str, *, thin: bool, critical: bool) -> dict:
+    if thin:
+        return {
+            "what": f"Ringkasan — dinamika volume: {what or 'data belum memadai.'} Sumber monitor, bukan rilis resmi.",
+            "so": THIN,
+            "now": _THIN_NOW,
+        }
+    krit = "Prioritas tinggi (≤24 jam setelah verifikasi): " if critical else ""
+    return {
+        "what": (
+            f"Ringkasan eksekutif — dinamika volume mention. {what} "
+            "Baca sebagai sinyal waktu (kapan perhatian naik), bukan sebagai volume resmi."
+        ),
+        "so": (
+            f"Implikasi operasional media: {so} "
+            "Evaluasi kritis: apakah lonjakan hanya berita sementara atau mulai mengikat narasi kebijakan BI?"
+        ),
+        "now": f"{krit}Tindak lanjut Kehumasan/KPw:\n{now}\n"
+        "Cek: (1) media tier-1 pada titik puncak, (2) selisih nada negatif vs rata-rata periode, (3) eskalasi 48 jam pasca klarifikasi.",
+    }
+
+
+def _voice_kata(what: str, so: str, now: str, *, thin: bool, critical: bool) -> dict:
+    if thin:
+        return {
+            "what": f"Isu & tren — kata/frasa dominan: {what or 'belum terbentuk.'} Perlu lebih banyak konten pada filter ini.",
+            "so": THIN,
+            "now": _THIN_NOW,
+        }
+    krit = "Risiko reputasi — respons disarankan ≤24 jam bila hoaks/penyederhanaan kebijakan: " if critical else ""
+    return {
+        "what": (
+            f"Isu & tren — konsentrasi wacana pada frasa tertentu. {what} "
+            "Frasa dominan sering menjadi label isu di media sosial; konteks tiap kutipan tetap wajib dibuka."
+        ),
+        "so": (
+            f"Bacaan narasi publik: {so} "
+            "Skeptisisme analitis: frasa yang sama bisa netral (berita) atau negatif (keluhan/hoaks)—jangan samakan tanpa bukti."
+        ),
+        "now": f"{krit}Penanganan isu:\n{now}\n"
+        "Cek: (1) lacak frasa di Jelajah Berita, (2) bedakan fakta vs opini, (3) klarifikasi baku hanya setelah Unit terkait setuju.",
+    }
+
+
+def _voice_komposisi(what: str, so: str, now: str, *, thin: bool, critical: bool) -> dict:
+    if thin:
+        return {
+            "what": f"Komposisi sentimen: {what or 'data tipis.'}",
+            "so": THIN,
+            "now": _THIN_NOW,
+        }
+    krit = "Ambang negatif terlampaui — " if critical else ""
+    return {
+        "what": f"Pemantauan nada publik — komposisi sentimen. {what}",
+        "so": (
+            f"{so} "
+            "Bandingkan dengan ambang pantau internal; lonjakan beberapa poin saja bisa mengubah prioritas kanal."
+        ),
+        "now": f"{krit}{now}\nTinjau ulang daftar konten negatif; amplifikasi konten positif hanya setelah persetujuan pimpinan.",
+    }
+
+
+def _voice_volume(what: str, so: str, now: str, *, thin: bool, critical: bool) -> dict:
+    if thin:
+        return {"what": what or "Data kategori belum memadai.", "so": THIN, "now": _THIN_NOW}
+    krit = "Kategori naik dengan nada negatif dominan — " if critical else ""
+    return {
+        "what": f"Pergeseran topik — perubahan volume per rubrik. {what}",
+        "so": f"{so} Tanyakan: apakah pergeseran ini berita musiman atau isu struktural?",
+        "now": f"{krit}{now}",
+    }
+
+
+def _voice_suara(what: str, so: str, now: str, *, thin: bool, critical: bool) -> dict:
+    if thin:
+        return {"what": what or "Suara publik belum terbaca.", "so": THIN, "now": _THIN_NOW}
+    krit = "Hoaks terdeteksi — koordinasi Unit Hukum: " if critical else ""
+    return {
+        "what": f"Suara publik — keluhan, kebutuhan, hoaks, dan apresiasi. {what}",
+        "so": f"{so} Klasifikasi otomatis bisa salah; analis wajib mengoreksi di Jelajah Berita.",
+        "now": f"{krit}{now}",
+    }
+
+
+_VOICE = {
+    "trend": _voice_trend,
+    "kata": _voice_kata,
+    "komposisi": _voice_komposisi,
+    "volume": _voice_volume,
+    "suara": _voice_suara,
+}
+
+
 def _apply_bi_voice(chart: str, sections: dict, *, thin: bool, critical: bool) -> dict:
-    title = CHARTS.get(chart, chart)
     what = (sections.get("what") or "").strip()
     so = (sections.get("so") or "").strip()
     now = (sections.get("now") or "").strip()
-    if thin:
-        return {
-            "what": (
-                f"Bank Indonesia/KPw BI DKI Jakarta — grafik {title}: "
-                f"{what or 'rentang belum memuat cukup konten.'} "
-                "Perluas filter tanggal atau jalankan pembaruan data."
-            ),
-            "so": THIN,
-            "now": THIN + "\nLangkah: kumpulkan minimal sumber sesuai ambang dashboard, lalu ulangi Generate Insight.",
-        }
-    krit = "KRITIS (24 jam setelah verifikasi bukti): " if critical else ""
-    what_bi = (
-        f"Pemantauan media — {title}. Bank Indonesia mencatat: {what} "
-        "Data dari monitor persepsi publik, bukan siaran pers resmi."
-    )
-    so_bi = (
-        f"Hipotesis dampak persepsi (bukan keputusan kebijakan moneter): {so} "
-        "Baca bersama konteks mandat BI: stabilitas nilai tukar rupiah, sistem pembayaran, dan inflasi."
-    )
-    now_bi = (
-        f"{krit}Saran komunikasi Kehumasan/KPw:\n{now}\n\n"
-        "Langkah implementasi:\n"
-        "1. Verifikasi daftar bukti; selaraskan fakta dengan juru bicara resmi.\n"
-        "2. Susun draf keterangan pers/unggahan kanal resmi — bahasa Indonesia baku.\n"
-        "3. Tinjau Unit Hukum bila hoaks, penilaian individu, atau kutipan UU.\n"
-        "4. Tayang setelah persetujuan pimpinan; pantau sentimen 48 jam."
-    )
-    return {"what": what_bi, "so": so_bi, "now": now_bi}
+    fn = _VOICE.get(chart, _voice_volume)
+    return fn(what, so, now, thin=thin, critical=critical)
 
 
 def generate(db: Session, window: dict, chart: str, grain: str = "day", topic: str = "", segment: str = "", area: str = "") -> dict:

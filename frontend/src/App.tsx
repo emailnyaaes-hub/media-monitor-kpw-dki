@@ -9,14 +9,11 @@ import IssuesPage from './pages/Issues'
 import KeywordsPage from './pages/Keywords'
 import Login from './pages/Login'
 import OverviewPage from './pages/Overview'
-import ReportsPage from './pages/Reports'
 import ReviewPage from './pages/Review'
 import SentimentPage from './pages/Sentiment'
 import SettingsPage from './pages/Settings'
-import SolusiPage from './pages/Solusi'
 import SourcesPage from './pages/Sources'
 import SuaraPage from './pages/Suara'
-import ToolsPage from './pages/Tools'
 
 function Guard() {
   const { user, loading } = useAuth()
@@ -37,13 +34,13 @@ export default function App() {
         <Route path="/sentimen" element={<SentimentPage />} />
         <Route path="/isu" element={<IssuesPage />} />
         <Route path="/suara" element={<SuaraPage />} />
-        <Route path="/solusi" element={<SolusiPage />} />
-        <Route path="/alat" element={<ToolsPage />} />
+        <Route path="/solusi" element={<Navigate to="/" replace />} />
+        <Route path="/alat" element={<Navigate to="/" replace />} />
         <Route path="/isu/:id" element={<IssueDetailPage />} />
         <Route path="/sumber" element={<SourcesPage />} />
         <Route path="/explorer" element={<ExplorerPage />} />
         <Route path="/alert" element={<AlertsPage />} />
-        <Route path="/laporan" element={<ReportsPage />} />
+        <Route path="/laporan" element={<Navigate to="/" replace />} />
         <Route path="/kata-kunci" element={<KeywordsPage />} />
         <Route path="/pengaturan" element={<SettingsPage />} />
       </Route>
