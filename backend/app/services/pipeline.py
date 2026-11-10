@@ -103,6 +103,10 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
             db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
             db.merge(AppMeta(key="data_mode", value="live"))
             db.commit()
+        elif added:
+            # Ada mention baru walau satu RSS gagal; tetap catat waktu agar UI tidak stuck.
+            db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
+            db.commit()
         log.info("Pengambilan %s selesai. baru=%s dilewati=%s ditolak=%s url_gagal=%s", mode, added, skipped, rejected, invalid)
         return {
             "status": "selesai",
@@ -148,9 +152,17 @@ def needs_refresh(db: Session) -> bool:
 
 
 def status_payload(db: Session) -> dict:
+    import os
+
     from app.scheduler import next_run_wib
 
     last = db.get(AppMeta, "last_ingest_at")
+    if os.environ.get("VERCEL") == "1" or os.environ.get("VERCEL_ENV"):
+        schedule = (
+            "Vercel 1×/hari (~08.00 WIB) + GitHub Actions tiap 2 jam bila workflow & CRON_SECRET aktif"
+        )
+    else:
+        schedule = "setiap 2 jam (penjadwal server)"
     rows = db.query(ConnectorRun).order_by(ConnectorRun.finished_at.desc(), ConnectorRun.id.desc()).limit(120).all()
     latest: dict[str, ConnectorRun] = {}
     for row in rows:
@@ -158,7 +170,7 @@ def status_payload(db: Session) -> dict:
     return {
         "last_updated": last.value if last else None,
         "next_update": next_run_wib(),
-        "schedule": "setiap 2 jam",
+        "schedule": schedule,
         "needs_refresh": needs_refresh(db),
         "running": ingest_lock.locked(),
         "timezone": "Asia/Jakarta",

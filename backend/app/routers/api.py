@@ -1030,8 +1030,9 @@ def job_ingest(
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(require_admin),
 ):
-    """mode=cepat: RSS langsung. Default: mulai di latar agar tombol UI tidak timeout."""
-    if wait:
+    """mode=cepat: RSS langsung. Di Vercel wajib sinkron agar proses tidak terbunuh."""
+    on_vercel = os.environ.get("VERCEL") == "1" or os.environ.get("VERCEL_ENV")
+    if wait or on_vercel:
         return ingest(db, mode=mode)
     return start_ingest(mode)
 
@@ -1048,7 +1049,10 @@ def cron_ingest(request: Request, db: Session = Depends(get_db)):
         pass
     else:
         raise HTTPException(status_code=401, detail="Cron tidak diizinkan")
-    # Mulai di latar: respons cepat, proses lanjut di container yang tetap hidup.
+    # Di Vercel container mati setelah respons; jalankan sinkron (mode cepat, batas ~35 detik).
+    on_vercel = os.environ.get("VERCEL") == "1" or os.environ.get("VERCEL_ENV")
+    if on_vercel:
+        return ingest(db, mode="cepat")
     return start_ingest("cepat")
 
 

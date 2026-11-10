@@ -330,7 +330,7 @@ function RefreshBar() {
     setBusy(true)
     setNote(auto ? 'Memperbarui otomatis dari RSS media terpercaya…' : 'Mengambil RSS Detik, Antara, CNN, Tempo, dan sumber langsung…')
     try {
-      const result = await api<{ status?: string; added?: number; error?: string; mode?: string; message?: string }>('/api/jobs/ingest?mode=cepat', { method: 'POST' })
+      const result = await api<{ status?: string; added?: number; error?: string; mode?: string; message?: string }>('/api/jobs/ingest?mode=cepat&wait=true', { method: 'POST' })
       if (result.status === 'gagal') {
         setNote(result.error || 'Pembaruan gagal')
         setBusy(false)
@@ -363,7 +363,8 @@ function RefreshBar() {
   }
 
   useEffect(() => {
-    if (user?.role !== 'admin' || !stale || busy || data?.running || autoTried.current || !data) return
+    const canAuto = user?.role === 'admin' || user?.role === 'analis'
+    if (!canAuto || !stale || busy || data?.running || autoTried.current || !data) return
     autoTried.current = true
     void refresh(true)
   }, [user?.role, stale, busy, data?.running, data])
