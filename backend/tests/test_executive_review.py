@@ -63,6 +63,29 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(result["findings"], [])
         self.assertEqual(result["status"], "Siap Terbit")
 
+    def test_kata_baku_track_changes(self):
+        with mock.patch.dict(os.environ, {"LLM_API_KEY": ""}):
+            result = review(
+                "Bank Indonesia menyampaikan update aktivitas pembayaran digital dan frekwensi transaksi.",
+                "siaran",
+                "",
+            )
+        cats = {item["kategori"] for item in result["findings"]}
+        self.assertIn("kata_baku", cats)
+        matched = [item for item in result["findings"] if item.get("hapus") and item.get("tambah")]
+        self.assertTrue(matched)
+        self.assertIn("track", result)
+        self.assertTrue(any(p["tipe"] == "hapus" for p in result["track"]))
+
+    def test_counts_three_pillars(self):
+        with mock.patch.dict(os.environ, {"LLM_API_KEY": ""}):
+            result = review(
+                "BI akan segera merilis info baru. Beberapa pihak menantikan dll.",
+                "caption",
+                "Instagram",
+            )
+        self.assertGreater(result["counts"].get("kejelasan", 0), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

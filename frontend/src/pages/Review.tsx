@@ -5,6 +5,8 @@ import { Card, ErrorNote, PageHeader } from '../components/Ui'
 interface Finding {
   start: number
   end: number
+  span_start?: number
+  span_end?: number
   kalimat: string
   kategori: string
   risiko: 'Tinggi' | 'Sedang' | 'Rendah' | string
@@ -12,7 +14,16 @@ interface Finding {
   dasar_hukum: string
   saran: string
   alasan: string
+  hapus?: string
+  tambah?: string
   accepted: boolean
+}
+
+interface TrackPiece {
+  tipe: 'teks' | 'hapus' | 'tambah'
+  isi: string
+  kategori?: string
+  alasan?: string
 }
 
 interface ReviewResult {
@@ -23,6 +34,7 @@ interface ReviewResult {
   score: number
   status: string
   counts: Record<string, number>
+  track?: TrackPiece[]
   error?: string
   method?: string
   saved?: boolean
@@ -33,6 +45,18 @@ const RISKS = {
   Sedang: 'border-amber-300 bg-amber-50',
   Rendah: 'border-sky-300 bg-sky-50',
 }
+
+const KATEGORI_LABEL: Record<string, string> = {
+  regulasi: 'Peraturan (UU)',
+  kata_baku: 'Kata baku',
+  kejelasan: 'Kejelasan',
+  reputasi: 'Reputasi kebijakan',
+  ambigu: 'Kejelasan',
+  gaya: 'Kata baku',
+}
+
+const FILTER_TABS = ['semua', 'regulasi', 'kata_baku', 'kejelasan'] as const
+type FilterTab = (typeof FILTER_TABS)[number]
 
 export default function ReviewPage() {
   const [kind, setKind] = useState('siaran')
@@ -46,9 +70,21 @@ export default function ReviewPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [notice, setNotice] = useState('')
+  const [filter, setFilter] = useState<FilterTab>('semua')
   const [history, setHistory] = useState<{ id: number; created_at: string; kind: string; platform: string; score: number; status: string }[]>([])
 
   const revised = useMemo(() => (result ? applyLocal(result.original, result.findings) : ''), [result])
+
+  const visibleFindings = useMemo(() => {
+    if (!result) return []
+    if (filter === 'semua') return result.findings
+    return result.findings.filter((item) => normalizeKategori(item.kategori) === filter)
+  }, [result, filter])
+
+  const trackPieces = useMemo(() => {
+    if (!result) return [] as TrackPiece[]
+    return buildTrackLocal(result.original, result.findings)
+  }, [result])
 
   async function submit() {
     setLoading(true)
@@ -113,7 +149,7 @@ export default function ReviewPage() {
     <div>
       <PageHeader
         title="Review Konten"
-        description="Periksa draf siaran pers atau caption sebelum terbit. Ini alat bantu, bukan keputusan Unit Hukum."
+        description="Periksa draf dari tiga sudut: kepatuhan UU, kata baku Indonesia, dan kejelasan kata. Saran ditampilkan ala track changes beserta alasan."
       />
       <Card className="mb-4">
         <div className="grid gap-3 md:grid-cols-2">
@@ -187,7 +223,8 @@ export default function ReviewPage() {
             <p className="text-sm">{result.disclaimer}</p>
             <p className="mt-2 text-2xl font-bold">{result.score}<span className="text-base font-normal text-muted"> / 100 · {result.status}</span></p>
             <p className="mt-1 text-sm text-muted">
-              Ambigu {result.counts.ambigu || 0} · Regulasi {result.counts.regulasi || 0} · Gaya {result.counts.gaya || 0} · Reputasi {result.counts.reputasi || 0}
+              UU / regulasi {result.counts.regulasi || 0} · Kata baku {result.counts.kata_baku || 0} · Kejelasan {result.counts.kejelasan || 0}
+              {(result.counts.reputasi || 0) > 0 ? ` · Reputasi ${result.counts.reputasi}` : ''}
               {result.method ? ` · ${result.method}` : ''}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -196,38 +233,81 @@ export default function ReviewPage() {
               <button className="h-10 rounded-lg border border-line px-3 text-sm" onClick={() => void exportDocx()}>Unduh .docx</button>
             </div>
           </Card>
+          <div className="mb-3 flex flex-wrap gap-2">
+            {FILTER_TABS.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                className={`h-9 rounded-lg border px-3 text-sm ${filter === tab ? 'border-navy-900 bg-navy-900 text-white' : 'border-line'}`}
+                onClick={() => setFilter(tab)}
+              >
+                {tab === 'semua' ? 'Semua temuan' : KATEGORI_LABEL[tab]}
+              </button>
+            ))}
+          </div>
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
-              <h2 className="font-medium">Teks asli</h2>
+              <h2 className="font-medium">Track changes (saran diterima)</h2>
+              <TrackChanges pieces={trackPieces} />
+              <h2 className="mt-4 font-medium">Teks asli (penanda risiko)</h2>
               <Highlighted text={result.original} findings={result.findings} />
               <h2 className="mt-4 font-medium">Versi revisi</h2>
               <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{revised}</p>
             </Card>
             <div className="grid gap-3">
-              {result.findings.length === 0 && <Card><p className="text-sm">Tidak ada temuan aturan pada draf ini. Tetap minta Unit Hukum meninjau sebelum terbit.</p></Card>}
-              {result.findings.map((item, index) => (
-                <article key={`${item.start}-${index}`} className={`rounded-md border p-3 text-sm ${RISKS[item.risiko as keyof typeof RISKS] || 'border-line'}`}>
-                  <p className="font-medium">{item.kategori} · {item.risiko} {item.accepted ? '· diterima' : '· ditolak'}</p>
-                  <p className="mt-2">{item.kalimat}</p>
-                  <p className="mt-2">{item.masalah}</p>
-                  <p className="mt-2 text-muted">{item.dasar_hukum}</p>
-                  <p className="mt-2"><span className="font-medium">Saran: </span>{item.saran}</p>
-                  <p className="mt-1"><span className="font-medium">Alasan: </span>{item.alasan}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button className="h-9 rounded border border-line px-2" onClick={() => update(index, { accepted: true })}>Terima</button>
-                    <button className="h-9 rounded border border-line px-2" onClick={() => update(index, { accepted: false })}>Tolak</button>
-                    <button className="h-9 rounded border border-line px-2" onClick={() => {
-                      const next = window.prompt('Edit saran', item.saran)
-                      if (next) update(index, { saran: next, accepted: true })
-                    }}>Edit manual</button>
-                  </div>
-                </article>
-              ))}
+              {visibleFindings.length === 0 && <Card><p className="text-sm">Tidak ada temuan pada filter ini. Tetap minta Unit Hukum meninjau sebelum terbit.</p></Card>}
+              {visibleFindings.map((item) => {
+                const index = result.findings.indexOf(item)
+                return (
+                  <article key={`${item.start}-${index}`} className={`rounded-md border p-3 text-sm ${RISKS[item.risiko as keyof typeof RISKS] || 'border-line'}`}>
+                    <p className="font-medium">{KATEGORI_LABEL[normalizeKategori(item.kategori)] || item.kategori} · {item.risiko} {item.accepted ? '· diterima' : '· ditolak'}</p>
+                    {(item.hapus || item.tambah) && (
+                      <p className="mt-2 rounded border border-line bg-card p-2 leading-relaxed">
+                        <del className="text-red-700 decoration-red-700">{item.hapus || item.kalimat}</del>
+                        {' '}
+                        <ins className="font-medium text-emerald-800 underline decoration-emerald-700">{item.tambah ?? item.saran}</ins>
+                      </p>
+                    )}
+                    <p className="mt-2 text-muted">{item.kalimat}</p>
+                    <p className="mt-2">{item.masalah}</p>
+                    <p className="mt-2 text-muted">{item.dasar_hukum}</p>
+                    <p className="mt-2"><span className="font-medium">Saran: </span>{item.saran}</p>
+                    <p className="mt-1"><span className="font-medium">Alasan: </span>{item.alasan}</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button className="h-9 rounded border border-line px-2" onClick={() => update(index, { accepted: true })}>Terima</button>
+                      <button className="h-9 rounded border border-line px-2" onClick={() => update(index, { accepted: false })}>Tolak</button>
+                      <button className="h-9 rounded border border-line px-2" onClick={() => {
+                        const next = window.prompt('Edit teks sisipan (tambah)', item.tambah ?? item.saran)
+                        if (next != null) update(index, { tambah: next, saran: next, accepted: true })
+                      }}>Edit manual</button>
+                    </div>
+                  </article>
+                )
+              })}
             </div>
           </div>
         </div>
       )}
     </div>
+  )
+}
+
+function TrackChanges({ pieces }: { pieces: TrackPiece[] }) {
+  if (!pieces.length) {
+    return <p className="mt-2 text-sm text-muted">Tidak ada perubahan otomatis. Terima saran di panel kanan untuk melihat track changes.</p>
+  }
+  return (
+    <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">
+      {pieces.map((piece, index) => {
+        if (piece.tipe === 'hapus') {
+          return <del key={index} className="bg-red-100 text-red-900 line-through decoration-red-700">{piece.isi}</del>
+        }
+        if (piece.tipe === 'tambah') {
+          return <ins key={index} className="bg-emerald-100 text-emerald-900 underline decoration-emerald-700">{piece.isi}</ins>
+        }
+        return <span key={index}>{piece.isi}</span>
+      })}
+    </p>
   )
 }
 
@@ -238,7 +318,12 @@ function Highlighted({ text, findings }: { text: string; findings: Finding[] }) 
   for (const item of marks) {
     if (item.start < cursor || item.end > text.length) continue
     if (item.start > cursor) pieces.push({ text: text.slice(cursor, item.start), className: '' })
-    const className = item.risiko === 'Tinggi' ? 'bg-red-200' : item.kategori === 'gaya' ? 'bg-sky-200' : 'bg-amber-200'
+    const cat = normalizeKategori(item.kategori)
+    const className =
+      item.risiko === 'Tinggi' ? 'bg-red-200'
+        : cat === 'regulasi' ? 'bg-violet-200'
+          : cat === 'kata_baku' ? 'bg-sky-200'
+            : 'bg-amber-200'
     pieces.push({ text: text.slice(item.start, item.end), className })
     cursor = item.end
   }
@@ -246,12 +331,55 @@ function Highlighted({ text, findings }: { text: string; findings: Finding[] }) 
   return <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{pieces.map((piece, index) => <mark key={index} className={piece.className || 'bg-transparent'}>{piece.text}</mark>)}</p>
 }
 
+function normalizeKategori(kategori: string) {
+  const k = (kategori || '').toLowerCase()
+  if (k === 'gaya') return 'kata_baku'
+  if (k === 'ambigu') return 'kejelasan'
+  return k
+}
+
+function buildTrackLocal(original: string, findings: Finding[]): TrackPiece[] {
+  const regions = findings
+    .filter((item) => item.accepted)
+    .map((item) => {
+      const start = item.span_start ?? item.start
+      const end = item.span_end ?? item.end
+      const hapus = item.hapus ?? original.slice(start, end)
+      let tambah = item.tambah
+      if (tambah == null && start === item.start && end === item.end) tambah = item.saran
+      return { start, end, hapus, tambah }
+    })
+    .filter((r) => r.hapus || r.tambah)
+    .sort((a, b) => a.start - b.start)
+
+  const pieces: TrackPiece[] = []
+  let cursor = 0
+  for (const region of regions) {
+    if (region.start < cursor) continue
+    if (region.start > cursor) pieces.push({ tipe: 'teks', isi: original.slice(cursor, region.start) })
+    if (region.hapus) pieces.push({ tipe: 'hapus', isi: region.hapus })
+    if (region.tambah) pieces.push({ tipe: 'tambah', isi: region.tambah })
+    cursor = Math.max(cursor, region.end)
+  }
+  if (cursor < original.length) pieces.push({ tipe: 'teks', isi: original.slice(cursor) })
+  return pieces
+}
+
 function applyLocal(original: string, findings: Finding[]) {
-  const accepted = findings.filter((item) => item.accepted && item.saran).sort((a, b) => b.start - a.start)
+  const accepted = findings.filter((item) => item.accepted).sort((a, b) => (b.span_start ?? b.start) - (a.span_start ?? a.start))
   let text = original
   for (const item of accepted) {
-    if (item.start >= 0 && item.end <= text.length && item.start < item.end) {
-      text = text.slice(0, item.start) + item.saran + text.slice(item.end)
+    const start = item.span_start ?? item.start
+    const end = item.span_end ?? item.end
+    let tambah = item.tambah
+    if (tambah == null) {
+      if (start === item.start && end === item.end) tambah = item.saran
+      else continue
+    }
+    if (start >= 0 && end <= text.length && start < end) {
+      text = text.slice(0, start) + tambah + text.slice(end)
+    } else if (start >= 0 && end <= text.length && start === end && tambah !== undefined) {
+      text = text.slice(0, start) + tambah + text.slice(end)
     }
   }
   return text
