@@ -51,6 +51,7 @@ CREATE TABLE mentions (
     title VARCHAR(400) NOT NULL,
     text TEXT NOT NULL DEFAULT '',
     brief TEXT NOT NULL DEFAULT '',
+    feed_section VARCHAR(32) NOT NULL DEFAULT 'beranda',
     language VARCHAR(8) NOT NULL DEFAULT 'id',
     likes INTEGER NOT NULL DEFAULT 0,
     shares INTEGER NOT NULL DEFAULT 0,

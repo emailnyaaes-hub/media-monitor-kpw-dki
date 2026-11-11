@@ -239,6 +239,7 @@ def status_payload(db: Session) -> dict:
 
 def retag(db: Session) -> int:
     from app.services.mention_brief import build_mention_brief
+    from app.services.news_sections import classify_feed_section
 
     keywords = db.query(Keyword).all()
     count = 0
@@ -248,6 +249,7 @@ def retag(db: Session) -> int:
             ensure_ascii=False,
         )
         row.brief = build_mention_brief(row)
+        row.feed_section = classify_feed_section(row)
         count += 1
     db.commit()
     return count
@@ -386,7 +388,12 @@ def _consider(db: Session, item, keywords: list, queries: list, rules: list) -> 
         status="baru",
         brief="",
     )
-    mention_kwargs["brief"] = build_mention_brief(Mention(**mention_kwargs))
+    stub = Mention(**mention_kwargs)
+    mention_kwargs["brief"] = build_mention_brief(stub)
+    from app.services.news_sections import classify_feed_section
+
+    stub.brief = mention_kwargs["brief"]
+    mention_kwargs["feed_section"] = classify_feed_section(stub)
     db.add(Mention(**mention_kwargs))
     db.commit()
     return "added"

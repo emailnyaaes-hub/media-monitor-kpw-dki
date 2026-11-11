@@ -29,7 +29,9 @@ export default function ExplorerPage() {
     if (query) setQ(query)
   }, [params])
 
+  const feedSection = params.get('feed_section') || ''
   const query = new URLSearchParams(filters.query)
+  if (feedSection) query.set('feed_section', feedSection)
   if (q) query.set('q', q)
   if (sentiment) query.set('sentiment', sentiment)
   if (stance) query.set('stance', stance)

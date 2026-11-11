@@ -555,6 +555,9 @@ def category_breakdown(db: Session, window: dict) -> list[dict]:
 
 def search_mentions(db: Session, window: dict, params: dict) -> dict:
     query = base_query(db, window)
+    feed_section = (params.get("feed_section") or "").strip()
+    if feed_section and feed_section != "beranda":
+        query = query.filter(Mention.feed_section == feed_section)
     if params.get("sentiment"):
         query = query.filter(Mention.sentiment == params["sentiment"])
     if params.get("stance"):

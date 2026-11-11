@@ -38,6 +38,8 @@ export interface MentionCard {
   quotes_bi: boolean
   keyword_matches?: string[]
   brief?: string
+  feed_section?: string
+  feed_section_label?: string
 }
 
 export interface MentionDetail extends MentionCard {

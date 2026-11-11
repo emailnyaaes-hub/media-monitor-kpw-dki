@@ -130,6 +130,13 @@ def init_db() -> None:
                 else "ALTER TABLE mentions ADD COLUMN IF NOT EXISTS brief TEXT NOT NULL DEFAULT ''"
             )
             connection.execute(text(ddl))
+        if "feed_section" not in columns:
+            ddl = (
+                "ALTER TABLE mentions ADD COLUMN feed_section VARCHAR(32) NOT NULL DEFAULT 'beranda'"
+                if IS_SQLITE
+                else "ALTER TABLE mentions ADD COLUMN IF NOT EXISTS feed_section VARCHAR(32) NOT NULL DEFAULT 'beranda'"
+            )
+            connection.execute(text(ddl))
 
 
 def get_db():

@@ -75,6 +75,45 @@ KEYWORD_GROUPS = {
     "Valuta asing": ["money changer", "dolar", "kupva BB", "tukar rupiah"],
     "Regulasi/Industri": ["PJP", "penyelenggara sistem pembayaran"],
     "Dompet digital/Fintech": ["flip", "GoPay", "DANA", "OVO"],
+    "KPw DKI Jakarta": [
+        "KPw BI DKI Jakarta",
+        "KPw BI Jakarta",
+        "KPw DKI",
+        "Bank Indonesia Jakarta",
+        "@kpwbi_dki",
+        "bankindonesiajakarta",
+    ],
+    "KPw Provinsi Lain": [
+        "KPw BI Jawa Barat",
+        "KPw BI Jawa Tengah",
+        "KPw BI Jawa Timur",
+        "KPw BI Sumatera Utara",
+        "KPw BI Bali",
+        "KPw BI Sulawesi Selatan",
+        "kantor perwakilan Bank Indonesia",
+    ],
+    "Pemprov DKI Jakarta": [
+        "Pemprov DKI Jakarta",
+        "Pemerintah Provinsi DKI",
+        "Diskominfo Jakarta",
+        "Jakarta Smart City",
+        "@dkijakarta",
+        "Balai Kota Jakarta",
+        "Bappeda Jakarta",
+        "Satpol PP Jakarta",
+        "Pramono Anung",
+        "Jakarta Pintu",
+    ],
+    "Berita Nasional": [
+        "Bank Indonesia",
+        "BI-Rate",
+        "kebijakan moneter",
+        "stabilitas rupiah",
+        "Sistem Pembayaran Nasional",
+        "keuangan daerah",
+        "inflasi nasional",
+        "intervensi valuta asing",
+    ],
 }
 
 EXCLUSIONS = ["lowongan", "karir", "loker", "kode promo", "iklan baris"]
@@ -91,6 +130,10 @@ SAVED_QUERIES = [
     (
         "Paket valuta dan pembayaran",
         '("money changer" OR dolar OR "kupva BB" OR "tukar rupiah" OR PJP OR "penyelenggara sistem pembayaran" OR flip OR GoPay OR DANA OR OVO) AND NOT (lowongan OR karir OR loker)',
+    ),
+    (
+        "Paket berita nasional Beranda",
+        '(Indonesia OR nasional OR Jakarta OR DKI OR ekonomi OR pemerintah OR politik OR moneter OR perbankan OR infrastruktur) AND NOT (lowongan OR karir OR loker)',
     ),
 ]
 

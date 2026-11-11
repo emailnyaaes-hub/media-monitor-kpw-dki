@@ -15,26 +15,23 @@ import type { MentionCard, Overview, TrendPoint } from '../types'
 import ExecutivePage from './Executive'
 
 const RUBRIK = [
-  { id: 'semua', label: 'Beranda' },
-  { id: 'Kebijakan Moneter', label: 'Moneter' },
-  { id: 'Rupiah/Kurs', label: 'Rupiah' },
-  { id: 'Inflasi', label: 'Inflasi' },
-  { id: 'Sistem Pembayaran', label: 'Pembayaran' },
-  { id: 'Perbankan/Kredit', label: 'Perbankan' },
-  { id: 'Ekonomi Jakarta', label: 'Ekonomi Jakarta' },
-  { id: 'Kegiatan KPw DKI', label: 'KPw DKI' },
-  { id: 'Reputasi/Kelembagaan', label: 'Kelembagaan' },
-  { id: 'Hoaks/Penipuan', label: 'Hoaks' },
-]
+  { id: 'beranda', label: 'Beranda', hint: 'Seluruh berita nasional yang dipantau, tidak dibatasi topik BI.' },
+  { id: 'bi_nasional', label: 'Berita Nasional', hint: 'Bank Indonesia, moneter, rupiah, inflasi, keuangan daerah, QRIS, dan mandat BI.' },
+  { id: 'kpw_dki', label: 'KPwBI DKI Jakarta', hint: 'Hanya Kantor Perwakilan BI Provinsi DKI Jakarta dan programnya.' },
+  { id: 'kpw_provinsi', label: 'KPwBI', hint: 'Kantor Perwakilan BI provinsi lain (bukan DKI Jakarta).' },
+  { id: 'pemprov_dki', label: 'Pemprov DKI Jakarta', hint: 'Pemerintah Provinsi DKI Jakarta, program daerah, dan kanal resmi Pemprov.' },
+] as const
 
 export default function OverviewPage() {
   const filters = useFilters()
   const navigate = useNavigate()
+  const [rubrik, setRubrik] = useState<(typeof RUBRIK)[number]['id']>('beranda')
   const [grain, setGrain] = useState<'day' | 'week' | 'month'>('day')
   const [picked, setPicked] = useState<AdviceItem | null>(null)
+  const feedParam = rubrik === 'beranda' ? '' : `&feed_section=${rubrik}`
   const overview = useApi<Overview>(`/api/overview?${filters.query}`)
-  const latest = useApi<{ items: MentionCard[] }>(`/api/mentions?page_size=16&sort=terbaru&${filters.query}`)
-  const popular = useApi<{ items: MentionCard[] }>(`/api/mentions?page_size=6&sort=jangkauan&${filters.query}`)
+  const latest = useApi<{ items: MentionCard[] }>(`/api/mentions?page_size=16&sort=terbaru&${filters.query}${feedParam}`)
+  const popular = useApi<{ items: MentionCard[] }>(`/api/mentions?page_size=6&sort=jangkauan&${filters.query}${feedParam}`)
   const extra = useApi<{ items: TrendPoint[] }>(grain === 'day' ? null : `/api/trend?granularity=${grain}&${filters.query}`)
   const advice = useApi<{ disclaimer: string; items: AdviceItem[] }>('/api/advices?top=3')
 
@@ -43,10 +40,13 @@ export default function OverviewPage() {
   const lead = stories[0]
   const side = stories.slice(1, 5)
   const trend = grain === 'day' ? data?.trend || [] : extra.data?.items || []
-  const aktif = filters.category || 'semua'
+  const aktif = rubrik
+  const rubrikMeta = RUBRIK.find((item) => item.id === rubrik) ?? RUBRIK[0]
 
   function openAll() {
-    navigate('/explorer')
+    const params = new URLSearchParams()
+    if (rubrik !== 'beranda') params.set('feed_section', rubrik)
+    navigate(params.size ? `/explorer?${params}` : '/explorer')
   }
 
   return (
@@ -59,13 +59,14 @@ export default function OverviewPage() {
               key={item.id}
               aria-current={on ? 'page' : undefined}
               className={`shrink-0 px-3 py-2 text-sm font-bold uppercase tracking-wide ${on ? 'bg-ink text-card' : 'hover:underline'}`}
-              onClick={() => filters.setCategory(item.id)}
+              onClick={() => setRubrik(item.id)}
             >
               {item.label}
             </button>
           )
         })}
       </nav>
+      <p className="-mt-2 mb-4 text-xs text-muted">{rubrikMeta.hint}</p>
 
       {data && (
         <p className="mb-4 text-sm">
@@ -82,7 +83,7 @@ export default function OverviewPage() {
       {(latest.error || overview.error) && <ErrorNote message={latest.error || overview.error} />}
 
       {!latest.loading && stories.length === 0 && (
-        <Empty label="Belum ada berita pada rubrik dan rentang ini. Pilih Beranda atau perlebar tanggal." />
+        <Empty label={`Belum ada berita pada rubrik «${rubrikMeta.label}». Coba Beranda atau perlebar tanggal, lalu jalankan retag bila data lama.`} />
       )}
 
       {lead && (
@@ -189,7 +190,11 @@ function SectionHead({ title, actionLabel, onAction }: { title: string; actionLa
 function Story({ item, lead = false, compact = false }: { item: MentionCard; lead?: boolean; compact?: boolean }) {
   return (
     <article>
-      {!compact && <p className="text-xs font-bold uppercase tracking-wide text-red-700">{item.category}</p>}
+      {!compact && (
+        <p className="text-xs font-bold uppercase tracking-wide text-red-700">
+          {item.feed_section_label && item.feed_section !== 'beranda' ? item.feed_section_label : item.category}
+        </p>
+      )}
       <a
         className={`mt-1 block font-bold leading-snug hover:underline ${lead ? 'text-3xl md:text-4xl' : compact ? 'text-base' : 'text-lg'}`}
         href={item.url}

@@ -83,8 +83,23 @@ def seed(db: Session) -> None:
     from app.services.blocklist import ensure_defaults
 
     ensure_defaults(db)
+    _ensure_catalog_updates(db)
     db.merge(AppMeta(key="data_mode", value="live"))
     db.commit()
+
+
+def _ensure_catalog_updates(db: Session) -> None:
+    """Tambahkan kata kunci dan query baru bila belum ada (tanpa menghapus kustomisasi pengguna)."""
+    for category, terms in KEYWORD_GROUPS.items():
+        for term in terms:
+            if db.query(Keyword).filter(Keyword.term == term, Keyword.mode == "inklusi").first():
+                continue
+            db.add(Keyword(term=term, category=category, mode="inklusi", is_active=True))
+    for name, expression in SAVED_QUERIES:
+        if db.query(SavedQuery).filter(SavedQuery.name == name).first():
+            continue
+        db.add(SavedQuery(name=name, expression=expression, is_active=True))
+    db.flush()
 
 
 def purge_mock(db: Session) -> int:

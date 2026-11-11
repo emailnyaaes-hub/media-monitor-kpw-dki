@@ -79,6 +79,7 @@ class Mention(Base):
     title: Mapped[str] = mapped_column(String(400), nullable=False)
     text: Mapped[str] = mapped_column(Text, default="")
     brief: Mapped[str] = mapped_column(Text, default="")
+    feed_section: Mapped[str] = mapped_column(String(32), default="beranda", index=True)
     language: Mapped[str] = mapped_column(String(8), default="id")
     likes: Mapped[int] = mapped_column(Integer, default=0)
     shares: Mapped[int] = mapped_column(Integer, default=0)
