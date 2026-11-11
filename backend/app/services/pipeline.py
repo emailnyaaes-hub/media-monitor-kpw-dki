@@ -16,7 +16,7 @@ from app.nlp import analyze
 from app.services.alerts import evaluate_rules
 from app.services.clock import now_wib
 from app.services.clustering import rebuild_issues
-from app.services.matching import excluded, matched_terms, passes_saved_queries
+from app.services.matching import eligible_for_ingest, matched_terms
 from app.services.urls import canonical_url, is_public_article
 
 log = logging.getLogger("bi.ingest")
@@ -323,7 +323,7 @@ def _consider(db: Session, item, keywords: list, queries: list, rules: list) -> 
 
     if is_blocked(url, item.author_handle, item.author_name, item.source_name, title, rules):
         return "rejected"
-    if excluded(match_text, keywords) or not matched_terms(match_text, keywords) or not passes_saved_queries(match_text, queries):
+    if not eligible_for_ingest(match_text, keywords, queries):
         return "rejected"
     digest = hashlib.sha256(url.encode()).hexdigest()
     if db.query(Mention).filter((Mention.content_hash == digest) | (Mention.url == url)).first():
@@ -389,11 +389,11 @@ def _consider(db: Session, item, keywords: list, queries: list, rules: list) -> 
         brief="",
     )
     stub = Mention(**mention_kwargs)
-    mention_kwargs["brief"] = build_mention_brief(stub)
     from app.services.news_sections import classify_feed_section
 
-    stub.brief = mention_kwargs["brief"]
     mention_kwargs["feed_section"] = classify_feed_section(stub)
+    stub.feed_section = mention_kwargs["feed_section"]
+    mention_kwargs["brief"] = build_mention_brief(stub)
     db.add(Mention(**mention_kwargs))
     db.commit()
     return "added"

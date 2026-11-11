@@ -114,6 +114,27 @@ KEYWORD_GROUPS = {
         "inflasi nasional",
         "intervensi valuta asing",
     ],
+    "Umum Nasional": [
+        "Indonesia",
+        "Jakarta",
+        "DKI",
+        "pemerintah",
+        "menteri",
+        "presiden",
+        "DPR",
+        "ekonomi",
+        "politik",
+        "nasional",
+        "infrastruktur",
+        "bencana",
+        "kesehatan",
+        "pendidikan",
+        "Pemprov",
+        "pemda",
+        "rupiah",
+        "inflasi",
+        "perbankan",
+    ],
 }
 
 EXCLUSIONS = ["lowongan", "karir", "loker", "kode promo", "iklan baris"]

@@ -22,9 +22,12 @@ from app.services.urls import canonical_url
 
 # Feed resmi yang pada pemeriksaan terakhir mengembalikan URL artikel penerbit.
 DIRECT_FEEDS = [
-    ("Detik", 1, "https://finance.detik.com/rss"),
-    ("Antara", 1, "https://www.antaranews.com/rss/ekonomi.xml"),
-    ("CNN Indonesia", 1, "https://www.cnnindonesia.com/ekonomi/rss"),
+    ("Detik Finance", 1, "https://finance.detik.com/rss"),
+    ("Detik", 1, "https://www.detik.com/rss"),
+    ("Antara Ekonomi", 1, "https://www.antaranews.com/rss/ekonomi.xml"),
+    ("Antara Nasional", 1, "https://www.antaranews.com/rss/nasional"),
+    ("CNN Indonesia Ekonomi", 1, "https://www.cnnindonesia.com/ekonomi/rss"),
+    ("CNN Indonesia Nasional", 1, "https://www.cnnindonesia.com/nasional/rss"),
     ("Tempo", 1, "https://rss.tempo.co/nasional"),
     ("Liputan6", 2, "https://feed.liputan6.com/rss/bisnis"),
     ("Bloomberg Technoz", 1, "https://www.bloombergtechnoz.com/rss"),
@@ -47,6 +50,14 @@ GOOGLE_QUERIES = [
     'QRIS "Bank Indonesia"',
     '"BI-FAST"',
     '"KPw BI" OR "Bank Indonesia Jakarta"',
+]
+
+GOOGLE_BERANDA_QUERIES = [
+    "Indonesia ekonomi",
+    "Jakarta pemerintah",
+    "politik Indonesia",
+    "pemerintah nasional",
+    "bencana Indonesia",
 ]
 
 
@@ -145,10 +156,26 @@ RELEVANT = (
     "suku bunga acuan",
 )
 
+# Feed rubrik Beranda: semua judul pada jendela waktu (penyaringan BI hanya di ingest).
+NATIONAL_FEED_NAMES = frozenset(
+    {
+        "Detik",
+        "Antara Nasional",
+        "CNN Indonesia Nasional",
+        "Tempo",
+    }
+)
+
+
+def _keep_rss_item(name: str, item: RawItem) -> bool:
+    if name in NATIONAL_FEED_NAMES:
+        return True
+    return _relevant(item)
+
 
 def fetch_direct(name: str, tier: int, url: str, since: datetime) -> FetchReport:
     try:
-        items = [item for item in read_rss(url, name, tier) if item.published_at >= since and _relevant(item)]
+        items = [item for item in read_rss(url, name, tier) if item.published_at >= since and _keep_rss_item(name, item)]
     except Exception as exc:
         return FetchReport(name, "gagal", f"Sumber tidak tersedia. RSS gagal: {exc.__class__.__name__}: {exc}")
     kept = [item for item in items if not _owned(item)][:12]
@@ -165,7 +192,7 @@ def _relevant(item: RawItem) -> bool:
 def fetch_google_news(since: datetime, deadline: float | None = None) -> FetchReport:
     items: list[RawItem] = []
     errors = 0
-    for query in GOOGLE_QUERIES:
+    for query in GOOGLE_QUERIES + GOOGLE_BERANDA_QUERIES:
         if deadline is not None and time.monotonic() > deadline:
             break
         try:

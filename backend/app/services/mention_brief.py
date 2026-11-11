@@ -39,10 +39,11 @@ def build_mention_brief(row: Mention) -> str:
     stance = (row.stance or "netral").casefold()
     sentiment = (row.sentiment or "netral").casefold()
     tier = int(row.source_tier or 2)
+    section = (getattr(row, "feed_section", None) or "").strip()
 
     s1 = _opening_sentence(title, snippet, source, platform)
-    s2 = _monitoring_sentence(category, sentiment, stance, tier, source, platform)
-    s3 = _implication_sentence(row, category)
+    s2 = _monitoring_sentence(category, sentiment, stance, tier, source, platform, row, section)
+    s3 = _implication_sentence(row, category, section)
 
     parts = [s for s in (s1, s2, s3) if s]
     text = " ".join(parts)
@@ -80,8 +81,8 @@ def _opening_sentence(title: str, snippet: str, source: str, platform: str) -> s
         platform.casefold(), "konten"
     )
     return (
-        f"{source} mempublikasikan {plat} berjudul «{title[:180]}» yang masuk kawasan pantauan "
-        "Bank Indonesia/KPw DKI Jakarta."
+        f"{source} mempublikasikan {plat} berjudul «{title[:180]}» dalam liputan nasional "
+        "yang dipantau rubrik Beranda."
     )
 
 
@@ -104,18 +105,30 @@ def _monitoring_sentence(
     tier: int,
     source: str,
     platform: str,
+    row: Mention,
+    section: str,
 ) -> str:
     sent_phrase = _SENTIMENT_LABEL.get(sentiment, "nada netral")
     stance_phrase = _STANCE_LABEL.get(stance, _STANCE_LABEL["netral"])
     tier_note = "media arus utama" if tier == 1 else "sumber daring"
     plat = platform if platform != "berita" else "portal berita"
+    if section == "beranda" and not row.quotes_bi and category == "Lainnya":
+        return (
+            f"Rubrik Beranda: liputan nasional umum ({sent_phrase}), dari {tier_note} {source} ({plat}); "
+            "bukan sindikasi khusus Bank Indonesia kecuali disebut pada judul/cuplikan."
+        )
     return (
         f"Pada kategori {category}, klasifikasi otomatis membaca {sent_phrase} dan posisi {stance_phrase}, "
         f"berasal dari {tier_note} {source} di {plat}."
     )
 
 
-def _implication_sentence(row: Mention, category: str) -> str:
+def _implication_sentence(row: Mention, category: str, section: str = "") -> str:
+    if section == "beranda" and not row.quotes_bi and category == "Lainnya":
+        return (
+            "Gunakan untuk peta isu nasional; pindahkan ke rubrik tematik (Berita Nasional, KPw, Pemprov) "
+            "bila nanti ada keterkaitan BI atau Jakarta."
+        )
     if row.needs_verification:
         return (
             "Cuplikan atau judul memuat indikator hoaks/penipuan; verifikasi tautan asli wajib "
