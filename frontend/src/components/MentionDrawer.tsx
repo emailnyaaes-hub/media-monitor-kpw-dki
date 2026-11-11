@@ -5,6 +5,7 @@ import { useAuth } from '../auth'
 import { formatReach, formatWhen, PLATFORM_LABEL, STATUS_LABEL } from '../format'
 import type { MentionDetail } from '../types'
 import { SEGMENTS, VOICE_OPTIONS } from '../voice'
+import MentionBrief from './MentionBrief'
 import { ErrorNote, HumanNote, QuoteBadge, SentimentBadge, SourceLink, StanceBadge, StatusBadge, VerifiedNote, inputClass } from './Ui'
 
 const STATUSES = ['baru', 'ditinjau', 'dieskalasi', 'ditangani', 'selesai']
@@ -74,6 +75,7 @@ export default function MentionDrawer({ id, onClose, onSaved }: { id: number; on
         {item && (
           <div className="mt-3 space-y-4">
             <h2 className="flex items-center gap-2 text-lg font-semibold leading-snug"><QuoteBadge show={item.quotes_bi} />{item.title}</h2>
+            <MentionBrief text={item.brief} compact={false} className="rounded-lg border border-line bg-canvas p-3 text-sm" />
             <div className="flex flex-wrap gap-2">
               <StanceBadge stance={item.stance} />
               <SentimentBadge sentiment={item.sentiment} />

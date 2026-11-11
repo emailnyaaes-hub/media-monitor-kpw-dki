@@ -37,6 +37,7 @@ export interface MentionCard {
   url: string
   quotes_bi: boolean
   keyword_matches?: string[]
+  brief?: string
 }
 
 export interface MentionDetail extends MentionCard {

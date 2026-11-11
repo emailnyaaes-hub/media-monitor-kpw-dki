@@ -50,6 +50,7 @@ CREATE TABLE mentions (
     published_at TIMESTAMP NOT NULL,
     title VARCHAR(400) NOT NULL,
     text TEXT NOT NULL DEFAULT '',
+    brief TEXT NOT NULL DEFAULT '',
     language VARCHAR(8) NOT NULL DEFAULT 'id',
     likes INTEGER NOT NULL DEFAULT 0,
     shares INTEGER NOT NULL DEFAULT 0,

@@ -238,6 +238,8 @@ def status_payload(db: Session) -> dict:
 
 
 def retag(db: Session) -> int:
+    from app.services.mention_brief import build_mention_brief
+
     keywords = db.query(Keyword).all()
     count = 0
     for row in db.query(Mention).all():
@@ -245,6 +247,7 @@ def retag(db: Session) -> int:
             matched_terms(f"{row.title}\n{row.text}", keywords),
             ensure_ascii=False,
         )
+        row.brief = build_mention_brief(row)
         count += 1
     db.commit()
     return count
@@ -335,46 +338,55 @@ def _consider(db: Session, item, keywords: list, queries: list, rules: list) -> 
         has_public_figure=False,
         credibility=item.credibility,
     )
+    from app.services.mention_brief import build_mention_brief
+
     hay = full.casefold()
-    db.add(
-        Mention(
-            content_hash=digest,
-            source_name=item.source_name[:120],
-            source_tier=item.source_tier,
-            platform=item.platform,
-            url=url,
-            author_name=(item.author_name or item.source_name)[:120],
-            author_handle=(item.author_handle or "")[:120],
-            published_at=item.published_at,
-            title=title,
-            text=text,
-            language="id",
-            likes=0,
-            shares=0,
-            comments=0,
-            reach_estimate=0,
-            keyword_matches=json.dumps(matched_terms(match_text, keywords), ensure_ascii=False),
-            sentiment=result["sentiment"],
-            sentiment_score=result["sentiment_score"],
-            stance=result["stance"],
-            confidence=result["confidence"],
-            rationale=result["rationale"],
-            category=result["category"],
-            risk_score=result["risk_score"],
-            policy_relevance=result["policy_relevance"],
-            policy_tags=json.dumps(result["policy_tags"], ensure_ascii=False),
-            spread_velocity=0,
-            impact_level="rendah",
-            credibility=item.credibility,
-            has_public_figure=False,
-            needs_verification="hoaks" in hay or "penipuan" in hay,
-            verification_note="Judul atau cuplikan memuat kata hoaks atau penipuan. Buka sumber asli sebelum menindaklanjuti." if "hoaks" in hay or "penipuan" in hay else "",
-            is_kpw="kpw" in hay or "dki" in hay or "jakarta" in hay,
-            location=next((city for city in CITIES if city.casefold() in hay), ""),
-            human_corrected=False,
-            quotes_bi=cites_bi(title, text),
-            status="baru",
-        )
+    needs_verification = "hoaks" in hay or "penipuan" in hay
+    quotes_bi = cites_bi(title, text)
+    mention_kwargs = dict(
+        content_hash=digest,
+        source_name=item.source_name[:120],
+        source_tier=item.source_tier,
+        platform=item.platform,
+        url=url,
+        author_name=(item.author_name or item.source_name)[:120],
+        author_handle=(item.author_handle or "")[:120],
+        published_at=item.published_at,
+        title=title,
+        text=text,
+        language="id",
+        likes=0,
+        shares=0,
+        comments=0,
+        reach_estimate=0,
+        keyword_matches=json.dumps(matched_terms(match_text, keywords), ensure_ascii=False),
+        sentiment=result["sentiment"],
+        sentiment_score=result["sentiment_score"],
+        stance=result["stance"],
+        confidence=result["confidence"],
+        rationale=result["rationale"],
+        category=result["category"],
+        risk_score=result["risk_score"],
+        policy_relevance=result["policy_relevance"],
+        policy_tags=json.dumps(result["policy_tags"], ensure_ascii=False),
+        spread_velocity=0,
+        impact_level="rendah",
+        credibility=item.credibility,
+        has_public_figure=False,
+        needs_verification=needs_verification,
+        verification_note=(
+            "Judul atau cuplikan memuat kata hoaks atau penipuan. Buka sumber asli sebelum menindaklanjuti."
+            if needs_verification
+            else ""
+        ),
+        is_kpw="kpw" in hay or "dki" in hay or "jakarta" in hay,
+        location=next((city for city in CITIES if city.casefold() in hay), ""),
+        human_corrected=False,
+        quotes_bi=quotes_bi,
+        status="baru",
+        brief="",
     )
+    mention_kwargs["brief"] = build_mention_brief(Mention(**mention_kwargs))
+    db.add(Mention(**mention_kwargs))
     db.commit()
     return "added"

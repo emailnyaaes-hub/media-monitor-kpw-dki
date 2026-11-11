@@ -111,18 +111,25 @@ def init_db() -> None:
     from app import models  # noqa: F401  — daftarkan tabel sebelum create_all
 
     Base.metadata.create_all(bind=engine)
-    if not IS_SQLITE:
+    inspector = inspect(engine)
+    if not inspector.has_table("mentions"):
         return
-    columns = {column["name"] for column in inspect(engine).get_columns("mentions")}
-    if "quotes_bi" not in columns:
-        with engine.begin() as connection:
-            connection.execute(text("ALTER TABLE mentions ADD COLUMN quotes_bi BOOLEAN NOT NULL DEFAULT 0"))
-    columns = {column["name"] for column in inspect(engine).get_columns("mentions")}
+    columns = {column["name"] for column in inspector.get_columns("mentions")}
     with engine.begin() as connection:
+        if IS_SQLITE and "quotes_bi" not in columns:
+            connection.execute(text("ALTER TABLE mentions ADD COLUMN quotes_bi BOOLEAN NOT NULL DEFAULT 0"))
+            columns.add("quotes_bi")
         if "voice_override" not in columns:
             connection.execute(text("ALTER TABLE mentions ADD COLUMN voice_override TEXT NOT NULL DEFAULT ''"))
         if "segment_override" not in columns:
             connection.execute(text("ALTER TABLE mentions ADD COLUMN segment_override TEXT NOT NULL DEFAULT ''"))
+        if "brief" not in columns:
+            ddl = (
+                "ALTER TABLE mentions ADD COLUMN brief TEXT NOT NULL DEFAULT ''"
+                if IS_SQLITE
+                else "ALTER TABLE mentions ADD COLUMN IF NOT EXISTS brief TEXT NOT NULL DEFAULT ''"
+            )
+            connection.execute(text(ddl))
 
 
 def get_db():

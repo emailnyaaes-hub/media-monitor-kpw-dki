@@ -78,6 +78,7 @@ class Mention(Base):
     published_at: Mapped[datetime] = mapped_column(DateTime, index=True, nullable=False)
     title: Mapped[str] = mapped_column(String(400), nullable=False)
     text: Mapped[str] = mapped_column(Text, default="")
+    brief: Mapped[str] = mapped_column(Text, default="")
     language: Mapped[str] = mapped_column(String(8), default="id")
     likes: Mapped[int] = mapped_column(Integer, default=0)
     shares: Mapped[int] = mapped_column(Integer, default=0)

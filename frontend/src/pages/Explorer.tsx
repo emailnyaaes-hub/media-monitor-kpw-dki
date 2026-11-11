@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { downloadFile, useApi } from '../api'
+import MentionBrief from '../components/MentionBrief'
 import MentionDrawer from '../components/MentionDrawer'
 import { Card, Empty, ErrorNote, Loading, PageHeader, QuoteBadge, SentimentBadge, SourceLink, StanceBadge, StatusBadge, inputClass } from '../components/Ui'
 import { useFilters } from '../filters'
@@ -100,6 +101,7 @@ export default function ExplorerPage() {
                 <button className="text-left" onClick={() => { setOpenId(item.id); setParams({ m: String(item.id) }) }}>
                   <span className="text-sm text-muted" title={`${formatWhen(item.published_at)} WIB`}>{item.source_name} · {relativeTime(item.published_at)}</span>
                   <span className="line-clamp-2 mt-1 block text-base">{item.title}</span>
+                  <MentionBrief text={item.brief} className="text-muted" />
                 </button>
                 <SourceLink url={item.url} />
               </li>

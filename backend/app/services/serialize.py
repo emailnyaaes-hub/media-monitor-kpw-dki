@@ -6,6 +6,7 @@ import json
 
 from app.constants import IMPACT_SCORE
 from app.models import Alert, Issue, Mention
+from app.services.mention_brief import mention_brief_for_row
 
 
 def loads(raw: str | None) -> list:
@@ -49,6 +50,7 @@ def mention_card(row: Mention) -> dict:
         "url": row.url,
         "quotes_bi": bool(row.quotes_bi),
         "keyword_matches": loads(row.keyword_matches),
+        "brief": mention_brief_for_row(row),
     }
 
 

@@ -5,6 +5,7 @@ import { StackedCategories } from '../components/Charts'
 import MentionDrawer from '../components/MentionDrawer'
 import { Card, ErrorNote, HumanNote, Loading, PageHeader, QuoteBadge, SentimentBadge, SourceLink, StanceBadge } from '../components/Ui'
 import { useFilters } from '../filters'
+import MentionBrief from '../components/MentionBrief'
 import { formatWhen, PLATFORM_LABEL } from '../format'
 import type { MentionCard } from '../types'
 
@@ -68,6 +69,7 @@ export default function SentimentPage() {
                     <span className="text-xs text-muted">keyakinan {Math.round(item.confidence * 100)}%</span>
                   </span>
                   <span className="mt-1 flex items-center gap-2 text-sm font-medium"><QuoteBadge show={item.quotes_bi} />{item.title}</span>
+                  <MentionBrief text={item.brief} />
                   <span className="text-xs text-muted">{item.category} · {item.source_name} · {PLATFORM_LABEL[item.platform]} · {formatWhen(item.published_at)}</span>
                   {item.confidence >= 0.99 && <span className="mt-1 block"><HumanNote /></span>}
                 </button>

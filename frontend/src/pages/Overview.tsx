@@ -6,6 +6,7 @@ import { priorityOf } from '../components/AdviceCard'
 import { TrendChart } from '../components/Charts'
 import BackToGeneral from '../components/BackToGeneral'
 import ChartInsight from '../components/ChartInsight'
+import MentionBrief from '../components/MentionBrief'
 import RecommendationDrawer from '../components/RecommendationDrawer'
 import { Empty, ErrorNote, Loading, QuoteBadge, StanceBadge } from '../components/Ui'
 import { useFilters } from '../filters'
@@ -198,6 +199,7 @@ function Story({ item, lead = false, compact = false }: { item: MentionCard; lea
         <QuoteBadge show={item.quotes_bi} />
         {item.title}
       </a>
+      <MentionBrief text={item.brief} />
       <p className="mt-1 text-xs text-muted">
         {item.source_name} · {PLATFORM_LABEL[item.platform] || item.platform} · <time dateTime={item.published_at}>{relativeTime(item.published_at)}</time>
         {' · '}
