@@ -166,7 +166,7 @@ _BI_NASIONAL = re.compile(
 
 
 def classify_feed_section(row: Mention) -> str:
-    hay = f"{row.title or ''}\n{row.text or ''}\n{row.source_name or ''}\n{row.author_name or ''}\n{row.author_handle or ''}"
+    hay = f"{row.title or ''}\n{row.text or ''}\n{row.source_name or ''}\n{row.author_name or ''}\n{row.author_handle or ''}\n{row.location or ''}"
     folded = hay.casefold()
 
     if _is_kpw_dki(folded, row):
@@ -180,6 +180,34 @@ def classify_feed_section(row: Mention) -> str:
     return "beranda"
 
 
+def row_matches_feed_section(row: Mention, section: str) -> bool:
+    """Pakai kolom tersimpan ATAU klasifikasi live — agar rubrik tidak kosong bila retag belum jalan."""
+    if not section or section == "beranda":
+        return True
+    if (getattr(row, "feed_section", None) or "") == section:
+        return True
+    return classify_feed_section(row) == section
+
+
+def _has_jakarta(folded: str, row: Mention) -> bool:
+    if row.location in {
+        "Jakarta Pusat", "Jakarta Utara", "Jakarta Barat", "Jakarta Selatan", "Jakarta Timur", "Kepulauan Seribu",
+    }:
+        return True
+    return bool(re.search(r"\b(?:dki\s+)?jakarta\b|\bdki\b", folded))
+
+
+def _has_bi_signal(folded: str, row: Mention) -> bool:
+    if getattr(row, "quotes_bi", False):
+        return True
+    return bool(
+        re.search(
+            r"\b(?:bank\s+indonesia|\bbi\b|kpw|qris|bi-rate|bi-fast|tpid|rupiah)\b",
+            folded,
+        )
+    )
+
+
 def _is_kpw_dki(folded: str, row: Mention) -> bool:
     program_hit = bool(_KPW_DKI_PROGRAMS.search(folded))
     # Akronim pendek (JEF/ISEF/JITEX) hanya jika ada jejak BI/KPw/Jakarta ekonomi.
@@ -188,12 +216,26 @@ def _is_kpw_dki(folded: str, row: Mention) -> bool:
         folded,
     ):
         program_hit = False
-    dki_hit = (
+
+    explicit = (
         row.category == "Kegiatan KPw DKI"
         or bool(_KPW_DKI.search(folded))
         or program_hit
         or any(handle in folded for handle in _KPW_DKI_HANDLES)
     )
+    # Perluas: berita BI/KPw yang menyinggung Jakarta/DKI masuk rubrik KPw DKI
+    # (bukan KPw provinsi lain).
+    local_bi = (
+        _has_jakarta(folded, row)
+        and _has_bi_signal(folded, row)
+        and not _other_kpw_province_hit(folded)
+    )
+    ekonomi_jakarta = row.category == "Ekonomi Jakarta" and (
+        _has_bi_signal(folded, row) or bool(getattr(row, "is_kpw", False))
+    )
+    flagged = bool(getattr(row, "is_kpw", False)) and _has_jakarta(folded, row) and _has_bi_signal(folded, row)
+
+    dki_hit = explicit or local_bi or ekonomi_jakarta or flagged
     if not dki_hit:
         return False
     if _other_kpw_province_hit(folded) and not (

@@ -43,6 +43,8 @@ class NewsSectionTests(unittest.TestCase):
             "Kerak Telor BI Jakarta bersama pelaku usaha",
             "JITEX dan Jakarta Youth Leadership Camp dibuka",
             "Indonesia Sharia Economic Forum (ISEF) di Jakarta",
+            "Bank Indonesia pantau inflasi di Jakarta Pusat",
+            "Edukasi QRIS untuk UMKM di DKI Jakarta",
         ]
         for title in samples:
             self.assertEqual(classify_feed_section(row(title=title)), "kpw_dki", title)

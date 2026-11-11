@@ -554,10 +554,10 @@ def category_breakdown(db: Session, window: dict) -> list[dict]:
 
 
 def search_mentions(db: Session, window: dict, params: dict) -> dict:
+    from app.services.news_sections import classify_feed_section, row_matches_feed_section
+
     query = base_query(db, window)
     feed_section = (params.get("feed_section") or "").strip()
-    if feed_section and feed_section != "beranda":
-        query = query.filter(Mention.feed_section == feed_section)
     if params.get("sentiment"):
         query = query.filter(Mention.sentiment == params["sentiment"])
     if params.get("stance"):
@@ -577,7 +577,10 @@ def search_mentions(db: Session, window: dict, params: dict) -> dict:
     keyword = (params.get("keyword") or "").casefold().strip()
     terms = [part.strip() for part in str(params.get("keywords") or "").split(",") if part.strip()]
     filtered = []
+    dirty = False
     for row in rows:
+        if feed_section and feed_section != "beranda" and not row_matches_feed_section(row, feed_section):
+            continue
         blob = f"{row.title}\n{row.text}"
         folded = f"{blob} {row.author_name} {row.source_name}".casefold()
         if needle and needle not in folded:
@@ -590,7 +593,17 @@ def search_mentions(db: Session, window: dict, params: dict) -> dict:
             continue
         if params.get("hour") not in (None, "") and row.published_at.hour != int(params["hour"]):
             continue
+        # Perbaiki label rubrik yang masih kosong/salah saat ditampilkan.
+        live = classify_feed_section(row)
+        if (row.feed_section or "beranda") != live:
+            row.feed_section = live
+            dirty = True
         filtered.append(row)
+    if dirty:
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
     sort = params.get("sort") or "terbaru"
     if sort == "risiko":
         filtered.sort(key=lambda row: row.risk_score, reverse=True)

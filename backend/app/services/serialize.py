@@ -7,7 +7,7 @@ import json
 from app.constants import IMPACT_SCORE
 from app.models import Alert, Issue, Mention
 from app.services.mention_brief import mention_brief_for_row
-from app.services.news_sections import FEED_SECTION_LABELS
+from app.services.news_sections import FEED_SECTION_LABELS, classify_feed_section
 
 
 def loads(raw: str | None) -> list:
@@ -52,8 +52,8 @@ def mention_card(row: Mention) -> dict:
         "quotes_bi": bool(row.quotes_bi),
         "keyword_matches": loads(row.keyword_matches),
         "brief": mention_brief_for_row(row),
-        "feed_section": getattr(row, "feed_section", None) or "beranda",
-        "feed_section_label": FEED_SECTION_LABELS.get(getattr(row, "feed_section", None) or "beranda", "Beranda"),
+        "feed_section": (section := classify_feed_section(row)),
+        "feed_section_label": FEED_SECTION_LABELS.get(section, "Beranda"),
     }
 
 

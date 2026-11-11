@@ -53,13 +53,17 @@ GOOGLE_QUERIES = [
 ]
 
 GOOGLE_KPW_DKI_QUERIES = [
-    '"KPw BI DKI Jakarta" OR "KPwBI Provinsi DKI Jakarta" OR "BI Jakarta"',
-    '"Iwan Setiawan" "Bank Indonesia"',
-    '"Jakarta Economic Forum" OR JEF Jakarta',
-    '"TPID Jakarta" OR "Inflasi Tahunan DKI Jakarta"',
-    '"UMKM DKI Jakarta" OR "Kerak Telor BI Jakarta"',
-    'ISEF OR "Indonesia Sharia Economic Forum" Jakarta',
+    '"KPw BI DKI Jakarta" OR "KPwBI Provinsi DKI Jakarta"',
+    '"BI Jakarta" OR "Bank Indonesia Jakarta"',
+    '"Iwan Setiawan" Bank Indonesia',
+    '"Jakarta Economic Forum"',
+    '"TPID Jakarta"',
+    '"Inflasi" "DKI Jakarta" "Bank Indonesia"',
+    '"UMKM" Jakarta "Bank Indonesia"',
+    '"Kerak Telor" "BI Jakarta"',
+    'ISEF Jakarta OR "Indonesia Sharia Economic Forum"',
     'JITEX OR "Jakarta Youth Leadership Camp"',
+    'QRIS "KPw" Jakarta',
 ]
 
 GOOGLE_BERANDA_QUERIES = [
@@ -90,16 +94,19 @@ def collect_reports(since: datetime, rules: list | None = None, mode: str = "pen
     global _active_rules
     _active_rules = list(rules or [])
     started = time.monotonic()
-    budget = 35 if mode == "cepat" else 180
+    budget = 50 if mode == "cepat" else 180
     try:
         reports: list[FetchReport] = []
+        # PRIORITAS: arsip KPw DKI dulu supaya rubrik tidak kosong (sebelum RSS memakan waktu).
+        reports.append(fetch_google_kpw_dki(deadline=started + (22 if mode == "cepat" else 60)))
         with ThreadPoolExecutor(max_workers=6) as pool:
             futures = {
                 pool.submit(fetch_direct, name, tier, url, since): name
                 for name, tier, url in DIRECT_FEEDS
             }
+            rss_budget = max(5, budget - (time.monotonic() - started) - 2)
             try:
-                for future in as_completed(futures, timeout=max(8, min(40, budget - 5))):
+                for future in as_completed(futures, timeout=max(8, min(40, rss_budget))):
                     name = futures[future]
                     try:
                         reports.append(future.result())
@@ -111,11 +118,6 @@ def collect_reports(since: datetime, rules: list | None = None, mode: str = "pen
                         continue
                     future.cancel()
                     reports.append(FetchReport(name, "gagal", "Sumber tidak tersedia. Batas waktu pengambilan habis."))
-        # Arsip KPw DKI (hingga 1 tahun) — ikut mode cepat agar rubrik tidak kosong.
-        if time.monotonic() - started < budget - 8:
-            reports.append(
-                fetch_google_kpw_dki(deadline=started + (budget - 3 if mode == "cepat" else budget - 10))
-            )
         if mode == "cepat":
             return reports
         if time.monotonic() - started < budget:
