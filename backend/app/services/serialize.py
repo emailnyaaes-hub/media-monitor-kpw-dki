@@ -52,8 +52,8 @@ def mention_card(row: Mention) -> dict:
         "quotes_bi": bool(row.quotes_bi),
         "keyword_matches": loads(row.keyword_matches),
         "brief": mention_brief_for_row(row),
-        "feed_section": row.feed_section or "beranda",
-        "feed_section_label": FEED_SECTION_LABELS.get(row.feed_section or "beranda", "Beranda"),
+        "feed_section": getattr(row, "feed_section", None) or "beranda",
+        "feed_section_label": FEED_SECTION_LABELS.get(getattr(row, "feed_section", None) or "beranda", "Beranda"),
     }
 
 

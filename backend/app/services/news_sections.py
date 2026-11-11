@@ -10,9 +10,18 @@ from __future__ import annotations
 
 import re
 
-from app.constants import CATEGORIES
 from app.models import Mention
-from app.services.executive import PROVINCES
+
+# Salinan daftar provinsi (tanpa impor executive/openpyxl) agar startup ringan di serverless.
+PROVINCES = [
+    "Kepulauan Riau", "Sumatera Utara", "Sumatera Barat", "Sumatera Selatan",
+    "Kalimantan Barat", "Kalimantan Tengah", "Kalimantan Selatan", "Kalimantan Timur", "Kalimantan Utara",
+    "Sulawesi Utara", "Sulawesi Tengah", "Sulawesi Selatan", "Sulawesi Tenggara", "Sulawesi Barat",
+    "Nusa Tenggara Barat", "Nusa Tenggara Timur", "Bangka Belitung", "DI Yogyakarta",
+    "Jawa Barat", "Jawa Tengah", "Jawa Timur", "Papua Barat Daya", "Papua Pegunungan",
+    "Papua Selatan", "Papua Tengah", "Papua Barat", "Maluku Utara",
+    "Aceh", "Riau", "Jambi", "Bengkulu", "Lampung", "Banten", "Bali", "Gorontalo", "Maluku", "Papua",
+]
 
 FEED_SECTIONS = ("beranda", "bi_nasional", "kpw_dki", "kpw_provinsi", "pemprov_dki")
 

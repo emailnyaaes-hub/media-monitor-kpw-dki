@@ -26,8 +26,6 @@ log = logging.getLogger("bi.startup")
 
 
 def _prepare_database() -> None:
-    """Jalan di thread terpisah supaya halaman login tidak menunggu Neon bangun."""
-    init_db()
     db = SessionLocal()
     try:
         seed_if_empty(db)
@@ -54,6 +52,10 @@ def _prepare_database_safely() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    try:
+        init_db()
+    except Exception:
+        log.exception("Migrasi basis data gagal")
     threading.Thread(target=_prepare_database_safely, name="startup-db", daemon=True).start()
     start_scheduler()
     yield

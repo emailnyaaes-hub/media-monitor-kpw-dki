@@ -141,11 +141,15 @@ def _audit(db: Session, actor: str, action: str, entity_type: str, entity_id: in
 def health(db: Session = Depends(get_db)):
     mode = db.get(AppMeta, "data_mode")
     seeded = db.get(AppMeta, "seeded_at")
+    import os
+
     return {
         "status": "ok",
         "mode": mode.value if mode else "unknown",
         "seeded_at": seeded.value if seeded else None,
         "mentions": external_only(db.query(Mention), load_rules(db)).count(),
+        "build": os.environ.get("VERCEL_GIT_COMMIT_SHA", "")[:12] or "local",
+        "features": ["feed_section_v1", "mention_brief"],
         "disclaimer": DISCLAIMER,
     }
 
