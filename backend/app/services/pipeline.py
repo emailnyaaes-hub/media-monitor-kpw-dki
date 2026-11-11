@@ -256,15 +256,17 @@ def retag(db: Session) -> int:
 
 
 def _since(db: Session) -> datetime:
+    """Jendela RSS/umum: hingga 90 hari agar berita lama relevan tetap bisa masuk."""
     last = db.get(AppMeta, "last_ingest_at")
     now = now_wib()
+    horizon = now - timedelta(days=90)
     if last is None or not last.value:
-        return now - timedelta(days=3)
+        return horizon
     try:
         previous = datetime.fromisoformat(last.value)
     except ValueError:
-        return now - timedelta(days=3)
-    return max(previous - timedelta(hours=6), now - timedelta(days=14))
+        return horizon
+    return max(previous - timedelta(hours=6), horizon)
 
 
 def _store_report(db: Session, report: FetchReport, keywords: list, queries: list, rules: list, started: datetime) -> dict:

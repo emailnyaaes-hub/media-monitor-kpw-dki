@@ -10,14 +10,14 @@ import MentionBrief from '../components/MentionBrief'
 import RecommendationDrawer from '../components/RecommendationDrawer'
 import { Empty, ErrorNote, Loading, QuoteBadge, StanceBadge } from '../components/Ui'
 import { useFilters } from '../filters'
-import { formatNumber, formatPct, PLATFORM_LABEL, relativeTime } from '../format'
+import { formatNumber, formatPct, isoDate, PLATFORM_LABEL, relativeTime } from '../format'
 import type { MentionCard, Overview, TrendPoint } from '../types'
 import ExecutivePage from './Executive'
 
 const RUBRIK = [
   { id: 'beranda', label: 'Beranda', hint: 'Seluruh berita nasional yang dipantau, tidak dibatasi topik BI.' },
   { id: 'bi_nasional', label: 'Berita Nasional', hint: 'Bank Indonesia, moneter, rupiah, inflasi, keuangan daerah, QRIS, dan mandat BI.' },
-  { id: 'kpw_dki', label: 'KPwBI DKI Jakarta', hint: 'Hanya Kantor Perwakilan BI Provinsi DKI Jakarta dan programnya.' },
+  { id: 'kpw_dki', label: 'KPwBI DKI Jakarta', hint: 'KPw BI Provinsi DKI Jakarta dan programnya — termasuk berita relevan hingga 1 tahun ke belakang.' },
   { id: 'kpw_provinsi', label: 'KPwBI', hint: 'Kantor Perwakilan BI provinsi lain (bukan DKI Jakarta).' },
   { id: 'pemprov_dki', label: 'Pemprov DKI Jakarta', hint: 'Pemerintah Provinsi DKI Jakarta, program daerah, dan kanal resmi Pemprov.' },
 ] as const
@@ -28,10 +28,22 @@ export default function OverviewPage() {
   const [rubrik, setRubrik] = useState<(typeof RUBRIK)[number]['id']>('beranda')
   const [grain, setGrain] = useState<'day' | 'week' | 'month'>('day')
   const [picked, setPicked] = useState<AdviceItem | null>(null)
-  const feedParam = rubrik === 'beranda' ? '' : `&feed_section=${rubrik}`
+  // Rubrik tematik: tampilkan arsip hingga 1 tahun agar section tidak kosong.
+  const mentionQuery = (() => {
+    const params = new URLSearchParams(filters.query)
+    if (rubrik !== 'beranda') {
+      params.set('feed_section', rubrik)
+      const end = new Date()
+      const start = new Date()
+      start.setFullYear(end.getFullYear() - 1)
+      params.set('date_from', isoDate(start))
+      params.set('date_to', isoDate(end))
+    }
+    return params.toString()
+  })()
   const overview = useApi<Overview>(`/api/overview?${filters.query}`)
-  const latest = useApi<{ items: MentionCard[] }>(`/api/mentions?page_size=16&sort=terbaru&${filters.query}${feedParam}`)
-  const popular = useApi<{ items: MentionCard[] }>(`/api/mentions?page_size=6&sort=jangkauan&${filters.query}${feedParam}`)
+  const latest = useApi<{ items: MentionCard[] }>(`/api/mentions?page_size=16&sort=terbaru&${mentionQuery}`)
+  const popular = useApi<{ items: MentionCard[] }>(`/api/mentions?page_size=6&sort=jangkauan&${mentionQuery}`)
   const extra = useApi<{ items: TrendPoint[] }>(grain === 'day' ? null : `/api/trend?granularity=${grain}&${filters.query}`)
   const advice = useApi<{ disclaimer: string; items: AdviceItem[] }>('/api/advices?top=3')
 

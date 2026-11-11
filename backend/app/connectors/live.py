@@ -111,8 +111,12 @@ def collect_reports(since: datetime, rules: list | None = None, mode: str = "pen
                         continue
                     future.cancel()
                     reports.append(FetchReport(name, "gagal", "Sumber tidak tersedia. Batas waktu pengambilan habis."))
+        # Arsip KPw DKI (hingga 1 tahun) — ikut mode cepat agar rubrik tidak kosong.
+        if time.monotonic() - started < budget - 8:
+            reports.append(
+                fetch_google_kpw_dki(deadline=started + (budget - 3 if mode == "cepat" else budget - 10))
+            )
         if mode == "cepat":
-            # Mode cepat: hanya RSS langsung (tanpa placeholder Threads/API sosial agar status tidak palsu).
             return reports
         if time.monotonic() - started < budget:
             reports.append(fetch_gdelt(since))
@@ -246,10 +250,16 @@ def fetch_google_site(name: str, domain: str, since: datetime) -> FetchReport:
     )
 
 
-def _google_query(query: str, since: datetime, limit: int, deadline: float | None = None) -> tuple[list[RawItem], int]:
+def _google_query(
+    query: str,
+    since: datetime,
+    limit: int,
+    deadline: float | None = None,
+    when: str = "14d",
+) -> tuple[list[RawItem], int]:
     address = (
         "https://news.google.com/rss/search?q="
-        + quote(f"{_exclude_owned_sites(query)} when:14d")
+        + quote(f"{_exclude_owned_sites(query)} when:{when}")
         + "&hl=id&gl=ID&ceid=ID:id"
     )
     raw_items = read_rss(address, "Google News", 2)
@@ -282,6 +292,39 @@ def _google_query(query: str, since: datetime, limit: int, deadline: float | Non
             continue
         kept.append(item)
     return kept, failed
+
+
+def fetch_google_kpw_dki(deadline: float | None = None) -> FetchReport:
+    """Tarik berita KPw DKI hingga 1 tahun ke belakang agar rubrik tidak kosong."""
+    since = now_wib() - timedelta(days=365)
+    items: list[RawItem] = []
+    errors = 0
+    seen: set[str] = set()
+    for query in GOOGLE_KPW_DKI_QUERIES:
+        if deadline is not None and time.monotonic() > deadline:
+            break
+        try:
+            batch, failed = _google_query(query, since, limit=8, deadline=deadline, when="1y")
+            errors += failed
+            for item in batch:
+                if item.url in seen:
+                    continue
+                seen.add(item.url)
+                items.append(item)
+        except Exception:
+            errors += 1
+    if not items and errors:
+        return FetchReport(
+            "Google News KPw DKI",
+            "gagal",
+            "Sumber tidak tersedia. Arsip KPw DKI gagal diurai ke URL penerbit.",
+        )
+    return FetchReport(
+        "Google News KPw DKI",
+        "berhasil",
+        f"{len(items)} berita KPw DKI (hingga 1 tahun). {errors} tautan gagal diurai.",
+        items,
+    )
 
 
 def fetch_gdelt(since: datetime) -> FetchReport:
