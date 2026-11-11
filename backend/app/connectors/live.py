@@ -52,6 +52,16 @@ GOOGLE_QUERIES = [
     '"KPw BI" OR "Bank Indonesia Jakarta"',
 ]
 
+GOOGLE_KPW_DKI_QUERIES = [
+    '"KPw BI DKI Jakarta" OR "KPwBI Provinsi DKI Jakarta" OR "BI Jakarta"',
+    '"Iwan Setiawan" "Bank Indonesia"',
+    '"Jakarta Economic Forum" OR JEF Jakarta',
+    '"TPID Jakarta" OR "Inflasi Tahunan DKI Jakarta"',
+    '"UMKM DKI Jakarta" OR "Kerak Telor BI Jakarta"',
+    'ISEF OR "Indonesia Sharia Economic Forum" Jakarta',
+    'JITEX OR "Jakarta Youth Leadership Camp"',
+]
+
 GOOGLE_BERANDA_QUERIES = [
     "Indonesia ekonomi",
     "Jakarta pemerintah",
@@ -192,7 +202,7 @@ def _relevant(item: RawItem) -> bool:
 def fetch_google_news(since: datetime, deadline: float | None = None) -> FetchReport:
     items: list[RawItem] = []
     errors = 0
-    for query in GOOGLE_QUERIES + GOOGLE_BERANDA_QUERIES:
+    for query in GOOGLE_QUERIES + GOOGLE_KPW_DKI_QUERIES + GOOGLE_BERANDA_QUERIES:
         if deadline is not None and time.monotonic() > deadline:
             break
         try:

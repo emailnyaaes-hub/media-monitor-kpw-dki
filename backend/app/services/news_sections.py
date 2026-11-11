@@ -54,13 +54,38 @@ _KPW_MARKERS = re.compile(
 _KPW_DKI = re.compile(
     r"\b(?:"
     r"kpw\s*bi\s*dki\s*jakarta|"
+    r"kpwbi\s+provinsi\s+dki\s+jakarta|"
     r"kpw\s*bi\s*jakarta|"
     r"kpw\s*dki\s*jakarta|"
     r"kpw\s*dki|"
     r"kpwbi\s+dki|"
-    r"bank\s+indonesia\s+jakarta|"
+    r"bank\s+indonesia\s+(?:provinsi\s+)?(?:dki\s+)?jakarta|"
+    r"bi\s+jakarta|"
+    r"kepala\s+perwakilan\s+bank\s+indonesia\s+provinsi\s+dki\s+jakarta|"
     r"kpw\s+bi\s+provinsi\s+dki"
     r")\b",
+    re.I,
+)
+
+# Program/agenda KPw DKI — frase lengkap + akronim berkonteks Jakarta/BI.
+_KPW_DKI_PROGRAMS = re.compile(
+    r"(?:"
+    r"\biwan\s+setiawan\b|"
+    r"\bjakarta\s+economic\s+forum\b|"
+    r"\bperekonomian\s+dki\s+jakarta\b|"
+    r"\binflasi\s+tahunan\s+dki\s+jakarta\b|"
+    r"\btim\s+pengendalian\s+inflasi\s+daerah\s+jakarta\b|"
+    r"\btpid\s+jakarta\b|"
+    r"\bkerak\s+telor\s+bi\s+jakarta\b|"
+    r"\bumkm\s+dki\s+jakarta\b|"
+    r"\bindonesia\s+sharia\s+economic\s+forum\b|"
+    r"\bjakarta\s+youth\s+leadership\s+camp\b|"
+    r"\bjakarta\s+international\s+investment[,\s]+trade[,\s]+tourism[,\s]+and\s+sme'?s?\s+expo\b|"
+    r"\bkuis\s+interaktif\s+tentang\s+literasi(?:\s+bank\s+indonesia\s+jakarta)?\b|"
+    r"\bjitex\b|"
+    r"\bisef\b|"
+    r"\bjef\b"
+    r")",
     re.I,
 )
 
@@ -156,14 +181,24 @@ def classify_feed_section(row: Mention) -> str:
 
 
 def _is_kpw_dki(folded: str, row: Mention) -> bool:
+    program_hit = bool(_KPW_DKI_PROGRAMS.search(folded))
+    # Akronim pendek (JEF/ISEF/JITEX) hanya jika ada jejak BI/KPw/Jakarta ekonomi.
+    if program_hit and re.search(r"\b(?:jef|isef|jitex)\b", folded) and not re.search(
+        r"(?:jakarta|bank\s+indonesia|\bbi\b|kpw|ekonomi|umkm|forum|expo|camp)",
+        folded,
+    ):
+        program_hit = False
     dki_hit = (
         row.category == "Kegiatan KPw DKI"
         or bool(_KPW_DKI.search(folded))
+        or program_hit
         or any(handle in folded for handle in _KPW_DKI_HANDLES)
     )
     if not dki_hit:
         return False
-    if _other_kpw_province_hit(folded) and not (_KPW_DKI.search(folded) or row.category == "Kegiatan KPw DKI"):
+    if _other_kpw_province_hit(folded) and not (
+        _KPW_DKI.search(folded) or program_hit or row.category == "Kegiatan KPw DKI"
+    ):
         return False
     return True
 

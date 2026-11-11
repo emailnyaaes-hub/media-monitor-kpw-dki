@@ -35,6 +35,18 @@ class NewsSectionTests(unittest.TestCase):
             "kpw_dki",
         )
 
+    def test_kpw_dki_keywords_from_catalog(self):
+        samples = [
+            "Iwan Setiawan tinjau UMKM DKI Jakarta",
+            "BI Jakarta gelar Jakarta Economic Forum",
+            "TPID Jakarta pantau Inflasi Tahunan DKI Jakarta",
+            "Kerak Telor BI Jakarta bersama pelaku usaha",
+            "JITEX dan Jakarta Youth Leadership Camp dibuka",
+            "Indonesia Sharia Economic Forum (ISEF) di Jakarta",
+        ]
+        for title in samples:
+            self.assertEqual(classify_feed_section(row(title=title)), "kpw_dki", title)
+
     def test_kpw_provinsi_not_dki(self):
         self.assertEqual(
             classify_feed_section(row(title="KPw BI Jawa Barat bahas inflasi daerah")),
