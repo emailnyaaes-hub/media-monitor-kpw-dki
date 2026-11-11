@@ -17,7 +17,7 @@ import ExecutivePage from './Executive'
 const RUBRIK = [
   { id: 'beranda', label: 'Beranda', hint: 'Seluruh berita nasional yang dipantau, tidak dibatasi topik BI.' },
   { id: 'bi_nasional', label: 'Berita Nasional', hint: 'Bank Indonesia, moneter, rupiah, inflasi, keuangan daerah, QRIS, dan mandat BI.' },
-  { id: 'kpw_dki', label: 'KPwBI DKI Jakarta', hint: 'KPw BI Provinsi DKI Jakarta dan programnya — termasuk berita relevan hingga 1 tahun ke belakang.' },
+  { id: 'kpw_dki', label: 'KPwBI DKI Jakarta', hint: 'KPw BI DKI Jakarta, program lokal, dan berita BI/Jakarta terkait (arsip hingga 1 tahun).' },
   { id: 'kpw_provinsi', label: 'KPwBI', hint: 'Kantor Perwakilan BI provinsi lain (bukan DKI Jakarta).' },
   { id: 'pemprov_dki', label: 'Pemprov DKI Jakarta', hint: 'Pemerintah Provinsi DKI Jakarta, program daerah, dan kanal resmi Pemprov.' },
 ] as const

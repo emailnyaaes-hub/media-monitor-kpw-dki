@@ -1063,7 +1063,7 @@ def cron_ingest(request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/jobs/retag")
-def job_retag(db: Session = Depends(get_db), _: CurrentUser = Depends(require_admin)):
+def job_retag(db: Session = Depends(get_db), _: CurrentUser = Depends(require_writer)):
     return {"updated": retag(db)}
 
 

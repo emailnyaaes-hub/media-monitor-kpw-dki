@@ -180,13 +180,70 @@ def classify_feed_section(row: Mention) -> str:
     return "beranda"
 
 
+_KPW_DKI_NEEDLES = (
+    "iwan setiawan",
+    "kpwbi",
+    "kpw bi",
+    "kpw dki",
+    "bi jakarta",
+    "bank indonesia jakarta",
+    "bank indonesia provinsi dki",
+    "jakarta economic forum",
+    "tpid jakarta",
+    "tim pengendalian inflasi daerah jakarta",
+    "perekonomian dki jakarta",
+    "inflasi tahunan dki",
+    "kerak telor",
+    "umkm dki jakarta",
+    "indonesia sharia economic forum",
+    "jakarta youth leadership",
+    "jakarta international investment",
+    "kuis interaktif tentang literasi",
+    "jitex",
+    "isef",
+    " jef",
+)
+
+
 def row_matches_feed_section(row: Mention, section: str) -> bool:
     """Pakai kolom tersimpan ATAU klasifikasi live — agar rubrik tidak kosong bila retag belum jalan."""
     if not section or section == "beranda":
         return True
     if (getattr(row, "feed_section", None) or "") == section:
         return True
-    return classify_feed_section(row) == section
+    if classify_feed_section(row) == section:
+        return True
+    if section == "kpw_dki" and _soft_kpw_dki(row):
+        return True
+    return False
+
+
+def _soft_kpw_dki(row: Mention) -> bool:
+    """Cadangan longgar: keyword katalog / flag lokal supaya rubrik tidak kosong."""
+    hay = f"{row.title or ''} {row.text or ''} {row.location or ''} {row.author_name or ''}".casefold()
+    if any(needle in hay for needle in _KPW_DKI_NEEDLES):
+        return True
+    if row.category in {"Kegiatan KPw DKI", "Ekonomi Jakarta"}:
+        return True
+    if getattr(row, "is_kpw", False) and ("jakarta" in hay or "dki" in hay):
+        return True
+    return False
+
+
+def select_for_feed_section(rows: list, section: str) -> list:
+    """Filter rubrik; jika KPw DKI masih kosong, longgarkan ke sinyal Jakarta/KPw."""
+    if not section or section == "beranda":
+        return list(rows)
+    matched = [row for row in rows if row_matches_feed_section(row, section)]
+    if matched or section != "kpw_dki":
+        return matched
+    # Last resort: semua mention yang menyebut Jakarta/DKI dalam jendela.
+    loose = []
+    for row in rows:
+        hay = f"{row.title or ''} {row.text or ''} {row.location or ''}".casefold()
+        if "jakarta" in hay or re.search(r"\bdki\b", hay) or getattr(row, "is_kpw", False):
+            loose.append(row)
+    return loose
 
 
 def _has_jakarta(folded: str, row: Mention) -> bool:

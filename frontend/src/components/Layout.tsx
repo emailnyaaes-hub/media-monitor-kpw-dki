@@ -304,6 +304,11 @@ function RefreshBar() {
   async function refresh() {
     setBusy(true)
     try {
+      try {
+        await api('/api/jobs/retag', { method: 'POST' })
+      } catch {
+        /* retag opsional bila bukan admin */
+      }
       await api('/api/jobs/ingest?mode=cepat&wait=true', { method: 'POST' })
     } catch {
       /* UI tetap sederhana */

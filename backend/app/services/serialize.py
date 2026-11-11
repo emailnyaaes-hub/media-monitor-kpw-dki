@@ -31,6 +31,8 @@ def quadrant(impact_level: str, velocity: float) -> str:
 
 
 def mention_card(row: Mention) -> dict:
+    stored = (getattr(row, "feed_section", None) or "").strip()
+    section = stored if stored in FEED_SECTION_LABELS else classify_feed_section(row)
     return {
         "id": row.id,
         "title": row.title,
@@ -52,7 +54,7 @@ def mention_card(row: Mention) -> dict:
         "quotes_bi": bool(row.quotes_bi),
         "keyword_matches": loads(row.keyword_matches),
         "brief": mention_brief_for_row(row),
-        "feed_section": (section := classify_feed_section(row)),
+        "feed_section": section,
         "feed_section_label": FEED_SECTION_LABELS.get(section, "Beranda"),
     }
 

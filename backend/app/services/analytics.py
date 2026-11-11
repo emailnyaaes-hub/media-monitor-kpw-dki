@@ -554,10 +554,19 @@ def category_breakdown(db: Session, window: dict) -> list[dict]:
 
 
 def search_mentions(db: Session, window: dict, params: dict) -> dict:
-    from app.services.news_sections import classify_feed_section, row_matches_feed_section
+    from app.services.news_sections import classify_feed_section, select_for_feed_section
 
-    query = base_query(db, window)
     feed_section = (params.get("feed_section") or "").strip()
+    # Rubrik tematik: otomatis longgarkan ke 1 tahun (frontend lama sering kirim 30 hari).
+    work = dict(window)
+    if feed_section and feed_section != "beranda":
+        end_date = work["date_to"]
+        start_date = end_date - timedelta(days=365)
+        if work["date_from"] > start_date:
+            work["date_from"] = start_date
+            work["start"] = datetime.combine(start_date, time.min)
+
+    query = base_query(db, work)
     if params.get("sentiment"):
         query = query.filter(Mention.sentiment == params["sentiment"])
     if params.get("stance"):
@@ -573,14 +582,14 @@ def search_mentions(db: Session, window: dict, params: dict) -> dict:
     if params.get("kpw"):
         query = query.filter(Mention.is_kpw.is_(True))
     rows = query.all()
+    if feed_section and feed_section != "beranda":
+        rows = select_for_feed_section(rows, feed_section)
     needle = (params.get("q") or "").casefold().strip()
     keyword = (params.get("keyword") or "").casefold().strip()
     terms = [part.strip() for part in str(params.get("keywords") or "").split(",") if part.strip()]
     filtered = []
     dirty = False
     for row in rows:
-        if feed_section and feed_section != "beranda" and not row_matches_feed_section(row, feed_section):
-            continue
         blob = f"{row.title}\n{row.text}"
         folded = f"{blob} {row.author_name} {row.source_name}".casefold()
         if needle and needle not in folded:
@@ -593,8 +602,10 @@ def search_mentions(db: Session, window: dict, params: dict) -> dict:
             continue
         if params.get("hour") not in (None, "") and row.published_at.hour != int(params["hour"]):
             continue
-        # Perbaiki label rubrik yang masih kosong/salah saat ditampilkan.
         live = classify_feed_section(row)
+        if feed_section == "kpw_dki" and live != "kpw_dki":
+            # Mention yang lolos soft-match ditandai agar rubrik konsisten.
+            live = "kpw_dki"
         if (row.feed_section or "beranda") != live:
             row.feed_section = live
             dirty = True
