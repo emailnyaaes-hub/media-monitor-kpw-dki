@@ -81,12 +81,18 @@ KEYWORD_GROUPS = {
         "KPw BI DKI Jakarta",
         "KPw BI Jakarta",
         "KPw DKI",
+        "BI DKI",
+        "BI DKI Jakarta",
+        "BI dan Pemprov DKI",
+        "Pemprov DKI",
         "Jakarta Economic Forum",
         "Kepala Perwakilan Bank Indonesia Provinsi DKI Jakarta",
         "BI Jakarta",
         "Bank Indonesia Jakarta",
         "Bank Indonesia Provinsi DKI Jakarta",
         "Perekonomian DKI Jakarta",
+        "Ekonomi DKI Jakarta",
+        "Ekonomi Jakarta",
         "Inflasi Tahunan DKI Jakarta",
         "Tim Pengendalian Inflasi Daerah Jakarta",
         "TPID Jakarta",
@@ -102,6 +108,7 @@ KEYWORD_GROUPS = {
         "JEF",
         "@kpwbi_dki",
         "bankindonesiajakarta",
+        "beritajakarta",
     ],
     "KPw Provinsi Lain": [
         "KPw BI Jawa Barat",
@@ -178,7 +185,7 @@ SAVED_QUERIES = [
     ),
     (
         "Paket KPwBI DKI Jakarta",
-        '("Iwan Setiawan" OR "KPwBI Provinsi DKI Jakarta" OR "KPw BI DKI" OR "Jakarta Economic Forum" OR "Kepala Perwakilan Bank Indonesia Provinsi DKI Jakarta" OR "BI Jakarta" OR "Bank Indonesia Jakarta" OR "Perekonomian DKI Jakarta" OR "Inflasi Tahunan DKI Jakarta" OR "TPID Jakarta" OR "Tim Pengendalian Inflasi Daerah Jakarta" OR "Kerak Telor BI Jakarta" OR "UMKM DKI Jakarta" OR "Indonesia Sharia Economic Forum" OR "Jakarta Youth Leadership Camp" OR JITEX OR ISEF OR JEF OR "Kuis Interaktif Tentang Literasi") AND NOT (lowongan OR karir OR loker)',
+        '("BI DKI" OR "BI DKI Jakarta" OR "BI dan Pemprov DKI" OR "Pemprov DKI" OR "Iwan Setiawan" OR "KPwBI Provinsi DKI Jakarta" OR "KPw BI DKI" OR "Jakarta Economic Forum" OR "Kepala Perwakilan Bank Indonesia Provinsi DKI Jakarta" OR "BI Jakarta" OR "Bank Indonesia Jakarta" OR "Perekonomian DKI Jakarta" OR "Ekonomi DKI Jakarta" OR "Ekonomi Jakarta" OR "Inflasi Tahunan DKI Jakarta" OR "TPID Jakarta" OR "Tim Pengendalian Inflasi Daerah Jakarta" OR "Kerak Telor BI Jakarta" OR "UMKM DKI Jakarta" OR "Indonesia Sharia Economic Forum" OR "Jakarta Youth Leadership Camp" OR JITEX OR ISEF OR JEF OR "Kuis Interaktif Tentang Literasi" OR beritajakarta) AND NOT (lowongan OR karir OR loker)',
     ),
 ]
 

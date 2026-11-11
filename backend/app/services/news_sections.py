@@ -61,6 +61,7 @@ _KPW_DKI = re.compile(
     r"kpwbi\s+dki|"
     r"bank\s+indonesia\s+(?:provinsi\s+)?(?:dki\s+)?jakarta|"
     r"bi\s+jakarta|"
+    r"bi\s+dki|"
     r"kepala\s+perwakilan\s+bank\s+indonesia\s+provinsi\s+dki\s+jakarta|"
     r"kpw\s+bi\s+provinsi\s+dki"
     r")\b",
@@ -185,6 +186,7 @@ _KPW_DKI_NEEDLES = (
     "kpwbi",
     "kpw bi",
     "kpw dki",
+    "bi dki",
     "bi jakarta",
     "bank indonesia jakarta",
     "bank indonesia provinsi dki",
@@ -192,6 +194,8 @@ _KPW_DKI_NEEDLES = (
     "tpid jakarta",
     "tim pengendalian inflasi daerah jakarta",
     "perekonomian dki jakarta",
+    "ekonomi dki jakarta",
+    "ekonomi jakarta",
     "inflasi tahunan dki",
     "kerak telor",
     "umkm dki jakarta",
@@ -199,6 +203,7 @@ _KPW_DKI_NEEDLES = (
     "jakarta youth leadership",
     "jakarta international investment",
     "kuis interaktif tentang literasi",
+    "pemprov dki",
     "jitex",
     "isef",
     " jef",

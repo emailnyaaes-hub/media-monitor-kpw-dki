@@ -49,11 +49,9 @@ def matches_beranda_query(text: str, queries: list) -> bool:
 
 
 def eligible_for_ingest(text: str, keywords: list[Keyword], queries: list) -> bool:
-    """Konten BI lewat kata kunci; berita nasional umum boleh lewat paket Beranda tanpa sebut BI."""
+    """Kata kunci inklusi ATAU salah satu paket tersimpan (termasuk Beranda/KPw DKI)."""
     if excluded(text, keywords):
-        return False
-    if not passes_saved_queries(text, queries):
         return False
     if matched_terms(text, keywords):
         return True
-    return matches_beranda_query(text, queries)
+    return passes_saved_queries(text, queries)

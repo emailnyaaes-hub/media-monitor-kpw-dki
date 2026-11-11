@@ -45,6 +45,9 @@ class NewsSectionTests(unittest.TestCase):
             "Indonesia Sharia Economic Forum (ISEF) di Jakarta",
             "Bank Indonesia pantau inflasi di Jakarta Pusat",
             "Edukasi QRIS untuk UMKM di DKI Jakarta",
+            "BI DKI Optimistis Ekonomi Jakarta Tumbuh Lebih Kuat",
+            "Ekonomi DKI Jakarta Tumbuh 5,87%, BI Ungkap Pemicunya",
+            "BI dan Pemprov DKI Perkuat Sinergi Investasi",
         ]
         for title in samples:
             self.assertEqual(classify_feed_section(row(title=title)), "kpw_dki", title)

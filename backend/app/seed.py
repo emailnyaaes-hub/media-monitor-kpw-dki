@@ -84,26 +84,31 @@ def seed(db: Session) -> None:
 
     ensure_defaults(db)
     _ensure_catalog_updates(db)
-    if db.get(AppMeta, "feed_section_v5") is None:
+    if db.get(AppMeta, "feed_section_v6") is None:
         from app.services.pipeline import retag
 
         retag(db)
-        db.merge(AppMeta(key="feed_section_v5", value=now_wib().isoformat(timespec="seconds")))
+        db.merge(AppMeta(key="feed_section_v6", value=now_wib().isoformat(timespec="seconds")))
     db.merge(AppMeta(key="data_mode", value="live"))
     db.commit()
 
 
 def _ensure_catalog_updates(db: Session) -> None:
-    """Tambahkan kata kunci dan query baru bila belum ada (tanpa menghapus kustomisasi pengguna)."""
+    """Tambahkan kata kunci baru; sinkronkan ekspresi paket seed agar frasa media baru ikut."""
     for category, terms in KEYWORD_GROUPS.items():
         for term in terms:
             if db.query(Keyword).filter(Keyword.term == term, Keyword.mode == "inklusi").first():
                 continue
             db.add(Keyword(term=term, category=category, mode="inklusi", is_active=True))
     for name, expression in SAVED_QUERIES:
-        if db.query(SavedQuery).filter(SavedQuery.name == name).first():
+        existing = db.query(SavedQuery).filter(SavedQuery.name == name).first()
+        if existing is None:
+            db.add(SavedQuery(name=name, expression=expression, is_active=True))
             continue
-        db.add(SavedQuery(name=name, expression=expression, is_active=True))
+        # Paket seed boleh diperbarui; query kustom pengguna (nama lain) tidak disentuh.
+        if existing.expression != expression:
+            existing.expression = expression
+            existing.is_active = True
     db.flush()
 
 

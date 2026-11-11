@@ -53,17 +53,17 @@ GOOGLE_QUERIES = [
 ]
 
 GOOGLE_KPW_DKI_QUERIES = [
+    # Frasa yang dipakai media lokal (prioritas tertinggi).
+    '"BI DKI"',
+    '"BI DKI Jakarta"',
+    'site:beritajakarta.id ("BI DKI" OR "Bank Indonesia" OR KPw)',
+    'site:bisnis.com "DKI Jakarta" (BI OR "Bank Indonesia")',
     '"KPw BI DKI Jakarta" OR "KPwBI Provinsi DKI Jakarta"',
     '"BI Jakarta" OR "Bank Indonesia Jakarta"',
-    '"Iwan Setiawan" Bank Indonesia',
-    '"Jakarta Economic Forum"',
+    '"Iwan Setiawan" ("Bank Indonesia" OR BI)',
     '"TPID Jakarta"',
-    '"Inflasi" "DKI Jakarta" "Bank Indonesia"',
-    '"UMKM" Jakarta "Bank Indonesia"',
-    '"Kerak Telor" "BI Jakarta"',
-    'ISEF Jakarta OR "Indonesia Sharia Economic Forum"',
-    'JITEX OR "Jakarta Youth Leadership Camp"',
-    'QRIS "KPw" Jakarta',
+    '"Jakarta Economic Forum"',
+    '"UMKM DKI Jakarta"',
 ]
 
 GOOGLE_BERANDA_QUERIES = [
@@ -94,11 +94,11 @@ def collect_reports(since: datetime, rules: list | None = None, mode: str = "pen
     global _active_rules
     _active_rules = list(rules or [])
     started = time.monotonic()
-    budget = 50 if mode == "cepat" else 180
+    budget = 55 if mode == "cepat" else 180
     try:
         reports: list[FetchReport] = []
         # PRIORITAS: arsip KPw DKI dulu supaya rubrik tidak kosong (sebelum RSS memakan waktu).
-        reports.append(fetch_google_kpw_dki(deadline=started + (22 if mode == "cepat" else 60)))
+        reports.append(fetch_google_kpw_dki(deadline=started + (28 if mode == "cepat" else 70)))
         with ThreadPoolExecutor(max_workers=6) as pool:
             futures = {
                 pool.submit(fetch_direct, name, tier, url, since): name
@@ -169,7 +169,11 @@ RELEVANT = (
     "qris",
     "rupiah",
     "kpw bi",
+    "kpwbi",
+    "bi dki",
+    "bi jakarta",
     "suku bunga acuan",
+    "tpid jakarta",
 )
 
 # Feed rubrik Beranda: semua judul pada jendela waktu (penyaringan BI hanya di ingest).
@@ -229,7 +233,8 @@ def fetch_google_news(since: datetime, deadline: float | None = None) -> FetchRe
 
 def fetch_google_site(name: str, domain: str, since: datetime) -> FetchReport:
     try:
-        items, failed = _google_query(f'"Bank Indonesia" site:{domain}', since, limit=4)
+        q = f'("BI DKI" OR "Bank Indonesia" OR "KPw BI") site:{domain}' if "jakarta" in domain else f'"Bank Indonesia" site:{domain}'
+        items, failed = _google_query(q, since, limit=6, when="30d")
     except Exception as exc:
         return FetchReport(
             f"Google News {name}",
@@ -252,6 +257,26 @@ def fetch_google_site(name: str, domain: str, since: datetime) -> FetchReport:
     )
 
 
+def _decode_google_item(item: RawItem) -> RawItem | None:
+    try:
+        decoded = canonical_url(publisher_url(item.url))
+    except Exception:
+        return None
+    if not decoded or "news.google.com" in decoded:
+        return None
+    source = _host_label(decoded)
+    item.url = decoded
+    item.source_name = source
+    item.author_name = source
+    item.source_tier = 1 if source in {
+        "Detik", "Kompas", "CNBC Indonesia", "Kontan", "Bisnis.com",
+        "Bloomberg Technoz", "CNN Indonesia", "Tempo", "Antara", "Berita Jakarta",
+    } else 2
+    if _owned(item):
+        return None
+    return item
+
+
 def _google_query(
     query: str,
     since: datetime,
@@ -259,62 +284,65 @@ def _google_query(
     deadline: float | None = None,
     when: str = "14d",
 ) -> tuple[list[RawItem], int]:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     address = (
         "https://news.google.com/rss/search?q="
         + quote(f"{_exclude_owned_sites(query)} when:{when}")
         + "&hl=id&gl=ID&ceid=ID:id"
     )
-    raw_items = read_rss(address, "Google News", 2)
+    raw_items = [
+        item
+        for item in read_rss(address, "Google News", 2)
+        if item.published_at >= since
+    ][: max(limit * 2, limit)]
+    if not raw_items:
+        return [], 0
     kept: list[RawItem] = []
     failed = 0
-    for item in raw_items:
-        if deadline is not None and time.monotonic() > deadline:
-            break
-        if item.published_at < since:
-            continue
-        if len(kept) >= limit:
-            break
-        try:
-            decoded = canonical_url(publisher_url(item.url))
-        except Exception:
-            failed += 1
-            continue
-        if not decoded or "news.google.com" in decoded:
-            failed += 1
-            continue
-        source = _host_label(decoded)
-        item.url = decoded
-        item.source_name = source
-        item.author_name = source
-        item.source_tier = 1 if source in {
-            "Detik", "Kompas", "CNBC Indonesia", "Kontan", "Bisnis.com",
-            "Bloomberg Technoz", "CNN Indonesia", "Tempo", "Antara",
-        } else 2
-        if _owned(item):
-            continue
-        kept.append(item)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = {pool.submit(_decode_google_item, item): item for item in raw_items}
+        for future in as_completed(futures):
+            if deadline is not None and time.monotonic() > deadline:
+                break
+            if len(kept) >= limit:
+                break
+            try:
+                decoded = future.result()
+            except Exception:
+                failed += 1
+                continue
+            if decoded is None:
+                failed += 1
+                continue
+            kept.append(decoded)
     return kept, failed
 
 
 def fetch_google_kpw_dki(deadline: float | None = None) -> FetchReport:
-    """Tarik berita KPw DKI hingga 1 tahun ke belakang agar rubrik tidak kosong."""
+    """Tarik berita KPw/BI DKI (termasuk frasa media «BI DKI»)."""
     since = now_wib() - timedelta(days=365)
     items: list[RawItem] = []
     errors = 0
     seen: set[str] = set()
-    for query in GOOGLE_KPW_DKI_QUERIES:
+    # when:7d dulu (artikel terkini seperti contoh user), lalu 1y.
+    for when, limit in (("7d", 6), ("1y", 4)):
+        for query in GOOGLE_KPW_DKI_QUERIES:
+            if deadline is not None and time.monotonic() > deadline:
+                break
+            try:
+                batch, failed = _google_query(query, since, limit=limit, deadline=deadline, when=when)
+                errors += failed
+                for item in batch:
+                    key = item.url.casefold()
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    items.append(item)
+            except Exception:
+                errors += 1
         if deadline is not None and time.monotonic() > deadline:
             break
-        try:
-            batch, failed = _google_query(query, since, limit=8, deadline=deadline, when="1y")
-            errors += failed
-            for item in batch:
-                if item.url in seen:
-                    continue
-                seen.add(item.url)
-                items.append(item)
-        except Exception:
-            errors += 1
     if not items and errors:
         return FetchReport(
             "Google News KPw DKI",
@@ -324,7 +352,7 @@ def fetch_google_kpw_dki(deadline: float | None = None) -> FetchReport:
     return FetchReport(
         "Google News KPw DKI",
         "berhasil",
-        f"{len(items)} berita KPw DKI (hingga 1 tahun). {errors} tautan gagal diurai.",
+        f"{len(items)} berita KPw/BI DKI. {errors} tautan gagal diurai.",
         items,
     )
 

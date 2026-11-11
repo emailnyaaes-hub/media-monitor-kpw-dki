@@ -58,6 +58,15 @@ def http_status(url: str, hops: int = 4) -> int:
     return 0
 
 
+# Media yang sering menolak bot (403) meski artikel publik — URL dari Google News tetap diterima.
+_BOT_WALL_HOSTS = (
+    "bisnis.com",
+    "kontan.co.id",
+    "cnbcindonesia.com",
+    "kompas.com",
+)
+
+
 def is_public_article(url: str) -> bool:
     lowered = url.lower()
     if "news.google.com" in lowered or "contoh.media-monitor.local" in lowered:
@@ -69,7 +78,14 @@ def is_public_article(url: str) -> bool:
     if _facebook_permalink(url) and status in {400, 401, 403}:
         # Facebook mengembalikan halaman "Error" untuk semua URL, termasuk halaman resmi, bila diminta program.
         return True
+    if status in {401, 403} and _bot_wall_host(url):
+        return True
     return 200 <= status < 400
+
+
+def _bot_wall_host(url: str) -> bool:
+    host = urlsplit(url).netloc.lower()
+    return any(host == name or host.endswith("." + name) for name in _BOT_WALL_HOSTS)
 
 
 def _facebook_permalink(url: str) -> bool:
