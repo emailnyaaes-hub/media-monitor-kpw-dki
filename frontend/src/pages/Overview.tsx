@@ -15,7 +15,6 @@ import type { MentionCard, Overview, TrendPoint } from '../types'
 import ExecutivePage from './Executive'
 
 const RUBRIK = [
-  { id: 'beranda', label: 'Beranda', hint: 'Seluruh berita nasional yang dipantau, tidak dibatasi topik BI.' },
   { id: 'bi_nasional', label: 'Berita Nasional', hint: 'Bank Indonesia, moneter, rupiah, inflasi, keuangan daerah, QRIS, dan mandat BI.' },
   { id: 'kpw_dki', label: 'KPwBI DKI Jakarta', hint: 'KPw BI DKI Jakarta, program lokal, dan berita BI/Jakarta terkait (arsip hingga 1 tahun).' },
   { id: 'kpw_provinsi', label: 'KPwBI', hint: 'Kantor Perwakilan BI di luar DKI — Jawa, Sumatera, Bali, Sulawesi, dan lainnya (arsip hingga 1 tahun).' },
@@ -25,20 +24,18 @@ const RUBRIK = [
 export default function OverviewPage() {
   const filters = useFilters()
   const navigate = useNavigate()
-  const [rubrik, setRubrik] = useState<(typeof RUBRIK)[number]['id']>('beranda')
+  const [rubrik, setRubrik] = useState<(typeof RUBRIK)[number]['id']>('bi_nasional')
   const [grain, setGrain] = useState<'day' | 'week' | 'month'>('day')
   const [picked, setPicked] = useState<AdviceItem | null>(null)
   // Rubrik tematik: tampilkan arsip hingga 1 tahun agar section tidak kosong.
   const mentionQuery = (() => {
     const params = new URLSearchParams(filters.query)
-    if (rubrik !== 'beranda') {
-      params.set('feed_section', rubrik)
-      const end = new Date()
-      const start = new Date()
-      start.setFullYear(end.getFullYear() - 1)
-      params.set('date_from', isoDate(start))
-      params.set('date_to', isoDate(end))
-    }
+    params.set('feed_section', rubrik)
+    const end = new Date()
+    const start = new Date()
+    start.setFullYear(end.getFullYear() - 1)
+    params.set('date_from', isoDate(start))
+    params.set('date_to', isoDate(end))
     return params.toString()
   })()
   const overview = useApi<Overview>(`/api/overview?${filters.query}`)
@@ -56,9 +53,7 @@ export default function OverviewPage() {
   const rubrikMeta = RUBRIK.find((item) => item.id === rubrik) ?? RUBRIK[0]
 
   function openAll() {
-    const params = new URLSearchParams()
-    if (rubrik !== 'beranda') params.set('feed_section', rubrik)
-    navigate(params.size ? `/explorer?${params}` : '/explorer')
+    navigate(`/explorer?feed_section=${encodeURIComponent(rubrik)}`)
   }
 
   return (
@@ -95,7 +90,7 @@ export default function OverviewPage() {
       {(latest.error || overview.error) && <ErrorNote message={latest.error || overview.error} />}
 
       {!latest.loading && stories.length === 0 && (
-        <Empty label={`Belum ada berita pada rubrik «${rubrikMeta.label}». Coba Beranda atau perlebar tanggal, lalu jalankan retag bila data lama.`} />
+        <Empty label={`Belum ada berita pada rubrik «${rubrikMeta.label}». Perlebar tanggal atau jalankan retag bila data lama.`} />
       )}
 
       {lead && (
