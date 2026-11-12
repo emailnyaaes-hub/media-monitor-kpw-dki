@@ -3,6 +3,8 @@
 Halaman https://www.jakarta.go.id/berita-jakarta mengagregasi tautan
 beritajakarta.id (kanal berita resmi Pemprov). Fallback: beranda beritajakarta.id.
 Tidak menyimpan HTML penuh — hanya judul, cuplikan singkat, URL, dan waktu terbit.
+
+Versi fetcher: pemprov-official-v2
 """
 
 from __future__ import annotations
