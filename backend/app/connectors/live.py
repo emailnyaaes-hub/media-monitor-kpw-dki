@@ -451,30 +451,56 @@ def fetch_google_pemprov_dki(deadline: float | None = None) -> FetchReport:
 
 
 def fetch_pemprov_portal(deadline: float | None = None) -> FetchReport:
-    """Portal resmi https://www.jakarta.go.id/berita-jakarta → tautan beritajakarta.id."""
+    """Portal resmi jakarta.go.id / beritajakarta.id; fallback Google News site:."""
     if deadline is not None and time.monotonic() > deadline:
         return FetchReport("Portal Pemprov DKI", "gagal", "Batas waktu pengambilan habis.")
+    items: list[RawItem] = []
+    note = ""
     try:
         from app.connectors.pemprov_official import fetch_pemprov_official
 
         items = fetch_pemprov_official(limit=20)
+        note = "portal resmi"
     except Exception as exc:
-        return FetchReport(
-            "Portal Pemprov DKI",
-            "gagal",
-            f"Portal jakarta.go.id gagal dibaca: {exc.__class__.__name__}: {exc}",
-        )
+        note = f"portal gagal ({exc.__class__.__name__})"
+    # Fallback wajib: Google News site resmi Pemprov.
+    if len(items) < 6 and (deadline is None or time.monotonic() < deadline):
+        since = now_wib() - timedelta(days=30)
+        for query in (
+            "site:beritajakarta.id",
+            "site:jakarta.go.id",
+            'site:beritajakarta.id (Pemprov OR Gubernur OR "Balai Kota")',
+        ):
+            if deadline is not None and time.monotonic() > deadline:
+                break
+            try:
+                batch, _failed = _google_query(query, since, limit=8, deadline=deadline, when="14d")
+            except Exception:
+                continue
+            for item in batch:
+                item.source_name = item.source_name or "Berita Jakarta"
+                if "beritajakarta" in (item.url or "").casefold() or "jakarta.go.id" in (item.url or "").casefold():
+                    item.author_name = "Pemprov DKI Jakarta"
+                    item.author_handle = item.author_handle or "@dkijakarta"
+                    item.location = item.location or "DKI Jakarta"
+                    item.credibility = max(item.credibility, 80)
+                if all(existing.url.casefold() != item.url.casefold() for existing in items):
+                    items.append(item)
+        if items and "portal" in note:
+            note = note + " + Google News"
+        elif items:
+            note = "Google News site:beritajakarta/jakarta.go.id"
     if not items:
         return FetchReport(
             "Portal Pemprov DKI",
             "gagal",
-            "Portal jakarta.go.id/berita-jakarta tidak mengembalikan tautan berita.",
+            f"Tidak ada berita Pemprov dari portal resmi maupun Google News. {note}",
         )
     return FetchReport(
         "Portal Pemprov DKI",
         "berhasil",
-        f"{len(items)} berita dari portal resmi Pemprov DKI (jakarta.go.id).",
-        items,
+        f"{len(items)} berita Pemprov DKI ({note}).",
+        items[:24],
     )
 
 
