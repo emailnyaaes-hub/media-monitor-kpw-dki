@@ -93,6 +93,17 @@ class NewsSectionTests(unittest.TestCase):
         ]
         for title in samples:
             self.assertEqual(classify_feed_section(row(title=title)), "pemprov_dki", title)
+        self.assertEqual(
+            classify_feed_section(
+                row(
+                    title="Pemprov DKI Raih Penghargaan Anindhita Wistara Data 2026",
+                    source_name="Portal Pemprov DKI",
+                    author_name="Pemprov DKI Jakarta",
+                    url="https://www.beritajakarta.id/read/156764/pemprov-dki-raih-penghargaan",
+                )
+            ),
+            "pemprov_dki",
+        )
 
     def test_bi_nasional(self):
         self.assertEqual(

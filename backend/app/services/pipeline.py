@@ -140,22 +140,37 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
                 fetch_google_kpw_dki,
                 fetch_google_kpw_provinsi,
                 fetch_google_pemprov_dki,
+                fetch_pemprov_portal,
             )
 
-            theme_deadline = time.monotonic() + 28
+            # Portal resmi Pemprov dulu (cepat, tanpa decode Google).
+            try:
+                _consume(fetch_pemprov_portal(deadline=time.monotonic() + 12))
+            except Exception as exc:
+                log.exception("Portal Pemprov gagal: %s", exc)
+
+            theme_deadline = time.monotonic() + 24
             with ThreadPoolExecutor(max_workers=3) as pool:
                 futures = [
+                    pool.submit(fetch_google_pemprov_dki, theme_deadline),
                     pool.submit(fetch_google_kpw_dki, theme_deadline),
                     pool.submit(fetch_google_kpw_provinsi, theme_deadline),
-                    pool.submit(fetch_google_pemprov_dki, theme_deadline),
                 ]
-                for future in as_completed(futures, timeout=32):
+                for future in as_completed(futures, timeout=28):
                     try:
                         _consume(future.result())
                     except Exception as exc:
                         log.exception("Arsip tematik gagal: %s", exc)
             reports = collect_reports(since, rules, mode=mode, include_thematic=False)
         else:
+            import time as _time
+
+            from app.connectors.live import fetch_pemprov_portal
+
+            try:
+                _consume(fetch_pemprov_portal(deadline=_time.monotonic() + 20))
+            except Exception as exc:
+                log.exception("Portal Pemprov gagal: %s", exc)
             reports = collect_reports(since, rules, mode=mode, include_thematic=True)
         for report in reports:
             _consume(report)

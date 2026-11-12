@@ -284,6 +284,8 @@ def _soft_pemprov_dki(row: Mention) -> bool:
     """Cadangan: sinyal Pemprov/Pemda DKI tanpa wajib frasa lengkap."""
     if classify_feed_section(row) in {"kpw_dki", "kpw_provinsi"}:
         return False
+    if _official_pemprov_source(row):
+        return True
     hay = f"{row.title or ''} {row.text or ''} {row.location or ''} {row.author_name or ''} {row.author_handle or ''}".casefold()
     if any(needle in hay for needle in _PEMPROV_DKI_NEEDLES):
         return True
@@ -417,10 +419,29 @@ def _is_kpw_provinsi(folded: str, row: Mention) -> bool:
     return False
 
 
+def _official_pemprov_source(row: Mention) -> bool:
+    hay = f"{row.source_name or ''} {row.author_name or ''} {getattr(row, 'url', '') or ''}".casefold()
+    return any(
+        token in hay
+        for token in (
+            "beritajakarta",
+            "jakarta.go.id",
+            "portal pemprov",
+            "pemprov dki jakarta",
+            "@dkijakarta",
+        )
+    )
+
+
 def _is_pemprov_dki(folded: str, row: Mention) -> bool:
     # Kolaborasi BI+Pemprov tetap prioritas KPw DKI (sudah dicek di atas).
     if _KPW_DKI.search(folded) or any(h in folded for h in _KPW_DKI_HANDLES):
         return False
+    # Portal resmi Pemprov / BeritaJakarta = rubrik Pemprov, kecuali berita BI/KPw eksplisit.
+    if _official_pemprov_source(row) and not (
+        _has_bi_signal(folded, row) and (_KPW_DKI.search(folded) or "bi dki" in folded or "kpw" in folded)
+    ):
+        return True
     if _PEMPROV_DKI.search(folded):
         return True
     if any(h in folded for h in _PEMPROV_HANDLES):
@@ -429,6 +450,8 @@ def _is_pemprov_dki(folded: str, row: Mention) -> bool:
         if not re.search(r"\b(?:bank\s+indonesia|\bkpw\b)\b", folded):
             return True
     if "pramono anung" in folded and re.search(r"\b(?:jakarta|dki|gubernur)\b", folded):
+        return True
+    if "rano karno" in folded and re.search(r"\b(?:jakarta|dki|wagub|gubernur)\b", folded):
         return True
     if row.category == "Ekonomi Jakarta" and _PEMPROV_DKI.search(folded):
         return True

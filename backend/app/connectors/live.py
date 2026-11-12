@@ -74,9 +74,11 @@ GOOGLE_KPW_PROVINSI_QUERIES = [
 ]
 
 GOOGLE_PEMPROV_DKI_QUERIES = [
+    'site:jakarta.go.id',
+    'site:beritajakarta.id',
     '"Pemprov DKI" OR "Pemprov DKI Jakarta"',
-    'site:beritajakarta.id (Pemprov OR "Balai Kota" OR "Gubernur DKI")',
-    '"Gubernur DKI" OR "Gubernur Jakarta" OR "Pramono Anung"',
+    'site:beritajakarta.id (Pemprov OR "Balai Kota" OR "Gubernur DKI" OR Wagub)',
+    '"Gubernur DKI" OR "Gubernur Jakarta" OR "Pramono Anung" OR "Rano Karno"',
     '"Jakarta Smart City" OR "Balai Kota Jakarta" OR "Diskominfo Jakarta"',
 ]
 
@@ -443,8 +445,36 @@ def fetch_google_pemprov_dki(deadline: float | None = None) -> FetchReport:
         "Google News Pemprov DKI",
         GOOGLE_PEMPROV_DKI_QUERIES,
         deadline=deadline,
-        recent_limit=5,
-        archive_limit=3,
+        recent_limit=6,
+        archive_limit=4,
+    )
+
+
+def fetch_pemprov_portal(deadline: float | None = None) -> FetchReport:
+    """Portal resmi https://www.jakarta.go.id/berita-jakarta → tautan beritajakarta.id."""
+    if deadline is not None and time.monotonic() > deadline:
+        return FetchReport("Portal Pemprov DKI", "gagal", "Batas waktu pengambilan habis.")
+    try:
+        from app.connectors.pemprov_official import fetch_pemprov_official
+
+        items = fetch_pemprov_official(limit=20)
+    except Exception as exc:
+        return FetchReport(
+            "Portal Pemprov DKI",
+            "gagal",
+            f"Portal jakarta.go.id gagal dibaca: {exc.__class__.__name__}: {exc}",
+        )
+    if not items:
+        return FetchReport(
+            "Portal Pemprov DKI",
+            "gagal",
+            "Portal jakarta.go.id/berita-jakarta tidak mengembalikan tautan berita.",
+        )
+    return FetchReport(
+        "Portal Pemprov DKI",
+        "berhasil",
+        f"{len(items)} berita dari portal resmi Pemprov DKI (jakarta.go.id).",
+        items,
     )
 
 
@@ -765,6 +795,7 @@ def _host_label(url: str) -> str:
         "liputan6.com": "Liputan6",
         "bloombergtechnoz.com": "Bloomberg Technoz",
         "beritajakarta.id": "Berita Jakarta",
+        "jakarta.go.id": "Portal Pemprov DKI",
         "tribunnews.com": "Warta Kota",
         "hukumonline.com": "Hukumonline",
     }

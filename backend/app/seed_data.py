@@ -142,10 +142,14 @@ KEYWORD_GROUPS = {
         "Bappeda Jakarta",
         "Satpol PP Jakarta",
         "Pramono Anung",
+        "Rano Karno",
         "Gubernur DKI",
         "Gubernur Jakarta",
         "Wagub DKI",
         "Jakarta Pintu",
+        "jakarta.go.id",
+        "beritajakarta.id",
+        "Portal Pemprov DKI",
     ],
     "Berita Nasional": [
         "Bank Indonesia",
@@ -209,7 +213,7 @@ SAVED_QUERIES = [
     ),
     (
         "Paket Pemprov DKI Jakarta",
-        '("Pemprov DKI" OR "Pemprov DKI Jakarta" OR "Pemerintah Provinsi DKI" OR "Balai Kota Jakarta" OR "Diskominfo Jakarta" OR "Jakarta Smart City" OR Jakartasatu OR "Jakarta Pintu" OR "Bappeda Jakarta" OR "Satpol PP Jakarta" OR "Pramono Anung" OR "Gubernur DKI" OR "Gubernur Jakarta" OR @dkijakarta OR @pemprovdki) AND NOT (lowongan OR karir OR loker)',
+        '("Pemprov DKI" OR "Pemprov DKI Jakarta" OR "Pemerintah Provinsi DKI" OR "Balai Kota Jakarta" OR "Diskominfo Jakarta" OR "Jakarta Smart City" OR Jakartasatu OR "Jakarta Pintu" OR "Bappeda Jakarta" OR "Satpol PP Jakarta" OR "Pramono Anung" OR "Rano Karno" OR "Gubernur DKI" OR "Gubernur Jakarta" OR @dkijakarta OR @pemprovdki OR beritajakarta OR "jakarta.go.id" OR "Portal Pemprov") AND NOT (lowongan OR karir OR loker)',
     ),
 ]
 

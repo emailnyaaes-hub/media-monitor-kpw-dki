@@ -84,11 +84,11 @@ def seed(db: Session) -> None:
 
     ensure_defaults(db)
     _ensure_catalog_updates(db)
-    if db.get(AppMeta, "feed_section_v7") is None:
+    if db.get(AppMeta, "feed_section_v8") is None:
         from app.services.pipeline import retag
 
         retag(db)
-        db.merge(AppMeta(key="feed_section_v7", value=now_wib().isoformat(timespec="seconds")))
+        db.merge(AppMeta(key="feed_section_v8", value=now_wib().isoformat(timespec="seconds")))
     db.merge(AppMeta(key="data_mode", value="live"))
     db.commit()
 

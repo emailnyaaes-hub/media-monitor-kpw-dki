@@ -67,10 +67,19 @@ _BOT_WALL_HOSTS = (
 )
 
 
+_TRUSTED_OFFICIAL_HOSTS = (
+    "beritajakarta.id",
+    "jakarta.go.id",
+)
+
+
 def is_public_article(url: str) -> bool:
     lowered = url.lower()
     if "news.google.com" in lowered or "contoh.media-monitor.local" in lowered:
         return False
+    # Portal resmi Pemprov: terima meski HEAD/GET bot ditolak.
+    if _host_in(url, _TRUSTED_OFFICIAL_HOSTS):
+        return True
     try:
         status = http_status(url)
     except Exception:
@@ -84,8 +93,12 @@ def is_public_article(url: str) -> bool:
 
 
 def _bot_wall_host(url: str) -> bool:
+    return _host_in(url, _BOT_WALL_HOSTS)
+
+
+def _host_in(url: str, hosts: tuple[str, ...]) -> bool:
     host = urlsplit(url).netloc.lower()
-    return any(host == name or host.endswith("." + name) for name in _BOT_WALL_HOSTS)
+    return any(host == name or host.endswith("." + name) for name in hosts)
 
 
 def _facebook_permalink(url: str) -> bool:
