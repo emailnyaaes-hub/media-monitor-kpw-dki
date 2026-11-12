@@ -336,6 +336,14 @@ def _has_bi_signal(folded: str, row: Mention) -> bool:
 
 
 def _is_kpw_dki(folded: str, row: Mention) -> bool:
+    # KPw provinsi lain selalu menang atas sinyal Jakarta generik.
+    if _other_kpw_province_hit(folded) and not (
+        bool(_KPW_DKI.search(folded))
+        or any(handle in folded for handle in _KPW_DKI_HANDLES)
+        or row.category == "Kegiatan KPw DKI"
+    ):
+        return False
+
     program_hit = bool(_KPW_DKI_PROGRAMS.search(folded))
     # Akronim pendek (JEF/ISEF/JITEX) hanya jika ada jejak BI/KPw/Jakarta ekonomi.
     if program_hit and re.search(r"\b(?:jef|isef|jitex)\b", folded) and not re.search(
@@ -362,14 +370,19 @@ def _is_kpw_dki(folded: str, row: Mention) -> bool:
     )
     flagged = bool(getattr(row, "is_kpw", False)) and _has_jakarta(folded, row) and _has_bi_signal(folded, row)
 
-    dki_hit = explicit or local_bi or ekonomi_jakarta or flagged
-    if not dki_hit:
-        return False
-    if _other_kpw_province_hit(folded) and not (
-        _KPW_DKI.search(folded) or program_hit or row.category == "Kegiatan KPw DKI"
-    ):
-        return False
-    return True
+    return bool(explicit or local_bi or ekonomi_jakarta or flagged)
+
+
+_KPW_PROVINCE_ALIASES = (
+    ("jabar", "jawa barat"),
+    ("jateng", "jawa tengah"),
+    ("jatim", "jawa timur"),
+    ("sumut", "sumatera utara"),
+    ("sumsel", "sumatera selatan"),
+    ("kaltim", "kalimantan timur"),
+    ("sulsel", "sulawesi selatan"),
+    ("sulut", "sulawesi utara"),
+)
 
 
 def _other_kpw_province_hit(folded: str) -> bool:
@@ -379,6 +392,11 @@ def _other_kpw_province_hit(folded: str) -> bool:
     for name in _OTHER_PROVINCES:
         if name.casefold() in folded and _KPW_MARKERS.search(folded):
             return True
+    # Singkatan media: KPwBI Jabar, BI Jatim, dll.
+    if _KPW_MARKERS.search(folded) or "kantor perwakilan" in folded:
+        for alias, _canon in _KPW_PROVINCE_ALIASES:
+            if re.search(r"\b" + re.escape(alias) + r"\b", folded):
+                return True
     return False
 
 

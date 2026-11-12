@@ -58,6 +58,7 @@ class NewsSectionTests(unittest.TestCase):
             "Kantor Perwakilan Bank Indonesia Provinsi Bali gelar edukasi QRIS",
             "KPwBI Sumatera Utara pantau TPID",
             "BI Jawa Timur perkuat UMKM daerah",
+            "Kantor Perwakilan Bank Indonesia Provinsi Jawa Barat (KPwBI Jabar) akselerasi ekonomi",
         ]
         for title in samples:
             self.assertEqual(classify_feed_section(row(title=title)), "kpw_provinsi", title)

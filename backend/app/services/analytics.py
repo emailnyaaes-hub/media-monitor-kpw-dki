@@ -603,8 +603,12 @@ def search_mentions(db: Session, window: dict, params: dict) -> dict:
         if params.get("hour") not in (None, "") and row.published_at.hour != int(params["hour"]):
             continue
         live = classify_feed_section(row)
-        if feed_section in {"kpw_dki", "kpw_provinsi", "pemprov_dki"} and live != feed_section:
-            # Soft-match / fallback rubrik: tandai agar tampilan konsisten.
+        # Soft-match hanya menandai berita yang masih «beranda»; jangan timpa rubrik tematik lain.
+        if (
+            feed_section in {"kpw_dki", "kpw_provinsi", "pemprov_dki"}
+            and live == "beranda"
+            and live != feed_section
+        ):
             live = feed_section
         if (row.feed_section or "beranda") != live:
             row.feed_section = live
