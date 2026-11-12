@@ -451,45 +451,42 @@ def fetch_google_pemprov_dki(deadline: float | None = None) -> FetchReport:
 
 
 def fetch_pemprov_portal(deadline: float | None = None) -> FetchReport:
-    """Portal resmi jakarta.go.id / beritajakarta.id; fallback Google News site:."""
-    if deadline is not None and time.monotonic() > deadline:
+    """Portal resmi jakarta.go.id / beritajakarta.id; fallback Google News singkat."""
+    hard_deadline = deadline if deadline is not None else time.monotonic() + 18
+    if time.monotonic() > hard_deadline:
         return FetchReport("Portal Pemprov DKI", "gagal", "Batas waktu pengambilan habis.")
     items: list[RawItem] = []
     note = ""
     try:
         from app.connectors.pemprov_official import fetch_pemprov_official
 
-        items = fetch_pemprov_official(limit=20)
+        items = fetch_pemprov_official(limit=16)
         note = "portal resmi"
     except Exception as exc:
         note = f"portal gagal ({exc.__class__.__name__})"
-    # Fallback wajib: Google News site resmi Pemprov.
-    if len(items) < 6 and (deadline is None or time.monotonic() < deadline):
-        since = now_wib() - timedelta(days=30)
-        for query in (
-            "site:beritajakarta.id",
-            "site:jakarta.go.id",
-            'site:beritajakarta.id (Pemprov OR Gubernur OR "Balai Kota")',
-        ):
-            if deadline is not None and time.monotonic() > deadline:
+    # Fallback singkat (jangan sampai menggantung seluruh Perbarui).
+    if len(items) < 8 and time.monotonic() < hard_deadline - 2:
+        since = now_wib() - timedelta(days=14)
+        google_deadline = min(hard_deadline, time.monotonic() + 12)
+        for query in ("site:beritajakarta.id", 'site:beritajakarta.id Pemprov'):
+            if time.monotonic() > google_deadline:
                 break
             try:
-                batch, _failed = _google_query(query, since, limit=8, deadline=deadline, when="14d")
+                batch, _failed = _google_query(
+                    query, since, limit=6, deadline=google_deadline, when="7d"
+                )
             except Exception:
                 continue
             for item in batch:
-                item.source_name = item.source_name or "Berita Jakarta"
-                if "beritajakarta" in (item.url or "").casefold() or "jakarta.go.id" in (item.url or "").casefold():
-                    item.author_name = "Pemprov DKI Jakarta"
-                    item.author_handle = item.author_handle or "@dkijakarta"
-                    item.location = item.location or "DKI Jakarta"
-                    item.credibility = max(item.credibility, 80)
+                item.source_name = "Berita Jakarta"
+                item.author_name = "Pemprov DKI Jakarta"
+                item.author_handle = "@dkijakarta"
+                item.location = "DKI Jakarta"
+                item.credibility = max(getattr(item, "credibility", 60) or 60, 80)
                 if all(existing.url.casefold() != item.url.casefold() for existing in items):
                     items.append(item)
-        if items and "portal" in note:
-            note = note + " + Google News"
-        elif items:
-            note = "Google News site:beritajakarta/jakarta.go.id"
+        if items:
+            note = (note + " + Google News").strip(" +") if note else "Google News site:beritajakarta.id"
     if not items:
         return FetchReport(
             "Portal Pemprov DKI",
@@ -500,7 +497,7 @@ def fetch_pemprov_portal(deadline: float | None = None) -> FetchReport:
         "Portal Pemprov DKI",
         "berhasil",
         f"{len(items)} berita Pemprov DKI ({note}).",
-        items[:24],
+        items[:20],
     )
 
 

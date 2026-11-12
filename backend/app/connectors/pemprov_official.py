@@ -22,7 +22,6 @@ LISTING_URLS = (
     "https://www.beritajakarta.id/",
     "https://m.beritajakarta.id/",
     "https://www.jakarta.go.id/berita-jakarta",
-    "https://www.jakarta.go.id/berita-jakarta?page=2&news=",
 )
 
 _ARTICLE_HREF = re.compile(
@@ -47,7 +46,8 @@ def fetch_pemprov_official(limit: int = 24) -> list[RawItem]:
         if len(items) >= limit:
             break
         try:
-            html = fetch_bytes(address, timeout=15, attempts=2).decode("utf-8", "replace")
+            # Timeout ketat: di Vercel jangan sampai menahan seluruh Perbarui.
+            html = fetch_bytes(address, timeout=8, attempts=1).decode("utf-8", "replace")
         except Exception as exc:
             errors.append(f"{address}:{exc.__class__.__name__}")
             continue

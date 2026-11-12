@@ -143,25 +143,31 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
                 fetch_pemprov_portal,
             )
 
-            # Portal resmi Pemprov dulu (cepat, tanpa decode Google).
+            # Portal resmi Pemprov dulu — hard cap agar tidak menggantung.
             try:
-                _consume(fetch_pemprov_portal(deadline=time.monotonic() + 12))
+                _consume(fetch_pemprov_portal(deadline=time.monotonic() + 16))
             except Exception as exc:
                 log.exception("Portal Pemprov gagal: %s", exc)
 
-            theme_deadline = time.monotonic() + 24
+            theme_deadline = time.monotonic() + 20
             with ThreadPoolExecutor(max_workers=3) as pool:
                 futures = [
                     pool.submit(fetch_google_pemprov_dki, theme_deadline),
                     pool.submit(fetch_google_kpw_dki, theme_deadline),
                     pool.submit(fetch_google_kpw_provinsi, theme_deadline),
                 ]
-                for future in as_completed(futures, timeout=28):
-                    try:
-                        _consume(future.result())
-                    except Exception as exc:
-                        log.exception("Arsip tematik gagal: %s", exc)
-            reports = collect_reports(since, rules, mode=mode, include_thematic=False)
+                try:
+                    for future in as_completed(futures, timeout=22):
+                        try:
+                            _consume(future.result())
+                        except Exception as exc:
+                            log.exception("Arsip tematik gagal: %s", exc)
+                except TimeoutError:
+                    log.warning("Batas waktu arsip tematik Google habis; lanjut RSS.")
+            # Mode cepat: skip RSS berat bila sudah dapat Pemprov, hemat waktu Vercel.
+            reports = []
+            if added < 3:
+                reports = collect_reports(since, rules, mode=mode, include_thematic=False)
         else:
             import time as _time
 
