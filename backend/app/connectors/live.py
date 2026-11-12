@@ -67,23 +67,17 @@ GOOGLE_KPW_DKI_QUERIES = [
 ]
 
 GOOGLE_KPW_PROVINSI_QUERIES = [
-    '"KPw BI" (Jawa OR Sumatera OR Sulawesi OR Bali OR Kalimantan OR Papua OR Maluku OR Nusa OR Aceh OR Riau OR Banten OR Lampung OR Jambi OR Bengkulu OR Gorontalo)',
-    '"Kantor Perwakilan Bank Indonesia" (Provinsi OR Jawa OR Sumatera OR Bali)',
-    '"KPw BI Jawa Barat" OR "KPw BI Jawa Tengah" OR "KPw BI Jawa Timur"',
-    '"KPw BI Sumatera Utara" OR "KPw BI Bali" OR "KPw BI Sulawesi Selatan"',
-    '"KPw BI" (Banten OR Lampung OR Riau OR Aceh OR "Kalimantan Timur" OR "Sulawesi Utara")',
-    '"Bank Indonesia" (Provinsi) (inflasi OR UMKM OR TPID) -Jakarta -DKI',
+    '"Kantor Perwakilan Bank Indonesia Provinsi"',
+    '"KPw BI Jawa Barat" OR "KPw BI Jawa Tengah" OR "KPw BI Jawa Timur" OR "KPw BI Banten"',
+    '"KPw BI Sumatera Utara" OR "KPw BI Bali" OR "KPw BI Sulawesi Selatan" OR "KPw BI Kalimantan Timur"',
+    '"KPwBI" (Jawa OR Sumatera OR Bali OR Sulawesi OR Banten OR Lampung)',
 ]
 
 GOOGLE_PEMPROV_DKI_QUERIES = [
     '"Pemprov DKI" OR "Pemprov DKI Jakarta"',
-    '"Pemerintah Provinsi DKI" OR "Pemerintah Provinsi Jakarta"',
-    'site:beritajakarta.id (Pemprov OR "Balai Kota" OR Diskominfo OR "Satpol PP")',
-    '"Jakarta Smart City" OR Jakartasatu OR "Jakarta Pintu"',
-    '"Pramono Anung" (Jakarta OR Gubernur)',
-    '"Gubernur DKI" OR "Gubernur Jakarta" OR "Wagub DKI"',
-    '"Bappeda Jakarta" OR "Diskominfo Jakarta" OR "Balai Kota Jakarta"',
-    'site:jakarta.go.id OR "@dkijakarta"',
+    'site:beritajakarta.id (Pemprov OR "Balai Kota" OR "Gubernur DKI")',
+    '"Gubernur DKI" OR "Gubernur Jakarta" OR "Pramono Anung"',
+    '"Jakarta Smart City" OR "Balai Kota Jakarta" OR "Diskominfo Jakarta"',
 ]
 
 GOOGLE_BERANDA_QUERIES = [
@@ -114,18 +108,24 @@ def collect_reports(since: datetime, rules: list | None = None, mode: str = "pen
     global _active_rules
     _active_rules = list(rules or [])
     started = time.monotonic()
-    budget = 70 if mode == "cepat" else 180
+    budget = 75 if mode == "cepat" else 180
     try:
         reports: list[FetchReport] = []
-        # PRIORITAS: rubrik tematik dulu supaya KPw DKI / KPw / Pemprov tidak kosong.
-        if mode == "cepat":
-            reports.append(fetch_google_kpw_dki(deadline=started + 18))
-            reports.append(fetch_google_kpw_provinsi(deadline=started + 32))
-            reports.append(fetch_google_pemprov_dki(deadline=started + 46))
-        else:
-            reports.append(fetch_google_kpw_dki(deadline=started + 55))
-            reports.append(fetch_google_kpw_provinsi(deadline=started + 85))
-            reports.append(fetch_google_pemprov_dki(deadline=started + 110))
+        # PRIORITAS: tiga rubrik tematik paralel agar tidak ada yang kehabisan waktu.
+        theme_deadline = started + (22 if mode == "cepat" else 70)
+        with ThreadPoolExecutor(max_workers=3) as theme_pool:
+            theme_futures = [
+                theme_pool.submit(fetch_google_kpw_dki, theme_deadline),
+                theme_pool.submit(fetch_google_kpw_provinsi, theme_deadline),
+                theme_pool.submit(fetch_google_pemprov_dki, theme_deadline),
+            ]
+            for future in as_completed(theme_futures, timeout=max(12, theme_deadline - time.monotonic() + 2)):
+                try:
+                    reports.append(future.result())
+                except Exception as exc:
+                    reports.append(
+                        FetchReport("Google News tematik", "gagal", f"Arsip tematik gagal: {exc.__class__.__name__}")
+                    )
         with ThreadPoolExecutor(max_workers=6) as pool:
             futures = {
                 pool.submit(fetch_direct, name, tier, url, since): name
@@ -402,17 +402,35 @@ def _fetch_google_archive(
 
 def fetch_google_kpw_dki(deadline: float | None = None) -> FetchReport:
     """Tarik berita KPw/BI DKI (termasuk frasa media «BI DKI»)."""
-    return _fetch_google_archive("Google News KPw DKI", GOOGLE_KPW_DKI_QUERIES, deadline=deadline, recent_limit=6, archive_limit=4)
+    return _fetch_google_archive(
+        "Google News KPw DKI",
+        GOOGLE_KPW_DKI_QUERIES[:6],
+        deadline=deadline,
+        recent_limit=5,
+        archive_limit=3,
+    )
 
 
 def fetch_google_kpw_provinsi(deadline: float | None = None) -> FetchReport:
     """Tarik berita KPw BI provinsi lain (bukan DKI)."""
-    return _fetch_google_archive("Google News KPw Provinsi", GOOGLE_KPW_PROVINSI_QUERIES, deadline=deadline)
+    return _fetch_google_archive(
+        "Google News KPw Provinsi",
+        GOOGLE_KPW_PROVINSI_QUERIES,
+        deadline=deadline,
+        recent_limit=5,
+        archive_limit=3,
+    )
 
 
 def fetch_google_pemprov_dki(deadline: float | None = None) -> FetchReport:
     """Tarik berita Pemprov DKI Jakarta dan kanal daerah."""
-    return _fetch_google_archive("Google News Pemprov DKI", GOOGLE_PEMPROV_DKI_QUERIES, deadline=deadline)
+    return _fetch_google_archive(
+        "Google News Pemprov DKI",
+        GOOGLE_PEMPROV_DKI_QUERIES,
+        deadline=deadline,
+        recent_limit=5,
+        archive_limit=3,
+    )
 
 
 def fetch_gdelt(since: datetime) -> FetchReport:
