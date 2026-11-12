@@ -137,6 +137,19 @@ def _audit(db: Session, actor: str, action: str, entity_type: str, entity_id: in
     )
 
 
+def _pemprov_fetcher_version() -> str:
+    try:
+        from app.connectors import pemprov_official
+
+        doc = pemprov_official.__doc__ or ""
+        marker = "Versi fetcher:"
+        if marker in doc:
+            return doc.split(marker, 1)[1].strip().splitlines()[0].strip()
+    except Exception:
+        return "missing"
+    return "unknown"
+
+
 @router.get("/health")
 def health(db: Session = Depends(get_db)):
     mode = db.get(AppMeta, "data_mode")
@@ -150,7 +163,7 @@ def health(db: Session = Depends(get_db)):
         "mentions": external_only(db.query(Mention), load_rules(db)).count(),
         "build": os.environ.get("VERCEL_GIT_COMMIT_SHA", "")[:12] or "local",
         "features": ["feed_section_v1", "mention_brief", "pemprov_official_v2"],
-        "pemprov_fetcher": __import__("app.connectors.pemprov_official", fromlist=["*"]).__doc__.split("Versi fetcher:")[-1].strip().splitlines()[0] if "Versi fetcher:" in (__import__("app.connectors.pemprov_official", fromlist=["*"]).__doc__ or "") else "unknown",
+        "pemprov_fetcher": _pemprov_fetcher_version(),
         "disclaimer": DISCLAIMER,
     }
 
