@@ -22,7 +22,7 @@ def publisher_url(google_url: str) -> str:
     html = fetch_bytes(
         f"https://news.google.com/rss/articles/{token}",
         headers={"User-Agent": "Mozilla/5.0"},
-        timeout=10,
+        timeout=5,
         attempts=1,
     ).decode("utf-8", "replace")
     signature = re.search(r'data-n-a-sg="([^"]+)"', html)
@@ -42,7 +42,7 @@ def publisher_url(google_url: str) -> str:
             "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
             "User-Agent": "Mozilla/5.0",
         },
-        timeout=10,
+        timeout=5,
         attempts=1,
     ).decode("utf-8", "replace")
     parsed_data = json.loads(raw.split("\n\n", 1)[1])

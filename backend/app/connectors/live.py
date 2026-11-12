@@ -355,15 +355,20 @@ def _google_query(
         return [], 0
     kept: list[RawItem] = []
     failed = 0
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    # Jangan pakai `with` pool: __exit__ menunggu semua future dan menggantung Vercel
+    # meski deadline sudah lewat.
+    from concurrent.futures import TimeoutError as FuturesTimeout
+
+    pool = ThreadPoolExecutor(max_workers=4)
+    try:
         futures = {pool.submit(_decode_google_item, item): item for item in raw_items}
-        for future in as_completed(futures):
+        for future in as_completed(futures, timeout=max(1.0, (deadline - time.monotonic()) if deadline else 20)):
             if deadline is not None and time.monotonic() > deadline:
                 break
             if len(kept) >= limit:
                 break
             try:
-                decoded = future.result()
+                decoded = future.result(timeout=0.1)
             except Exception:
                 failed += 1
                 continue
@@ -371,6 +376,10 @@ def _google_query(
                 failed += 1
                 continue
             kept.append(decoded)
+    except (TimeoutError, FuturesTimeout):
+        failed += max(0, len(raw_items) - len(kept))
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
     return kept, failed
 
 
@@ -510,6 +519,7 @@ def fetch_pemprov_portal(deadline: float | None = None) -> FetchReport:
     items: list[RawItem] = []
     notes: list[str] = []
     seen: set[str] = set()
+    on_vercel = bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"))
 
     def _push(batch: list[RawItem]) -> None:
         for item in batch:
@@ -525,13 +535,17 @@ def fetch_pemprov_portal(deadline: float | None = None) -> FetchReport:
     # 1) Google News dulu — Vercel biasanya bisa ke news.google.com, bukan ke portal DKI.
     if time.monotonic() < hard_deadline - 1:
         since = now_wib() - timedelta(days=14)
-        google_deadline = min(hard_deadline - 1, time.monotonic() + 11)
-        for query in ("site:beritajakarta.id", 'site:beritajakarta.id (Pemprov OR Pramono)'):
-            if time.monotonic() > google_deadline or len(items) >= 16:
+        google_deadline = min(hard_deadline - 1, time.monotonic() + (9 if on_vercel else 11))
+        queries = ("site:beritajakarta.id",) if on_vercel else (
+            "site:beritajakarta.id",
+            'site:beritajakarta.id (Pemprov OR Pramono)',
+        )
+        for query in queries:
+            if time.monotonic() > google_deadline or len(items) >= 12:
                 break
             try:
                 batch, _failed = _google_query(
-                    query, since, limit=10, deadline=google_deadline, when="14d"
+                    query, since, limit=8 if on_vercel else 10, deadline=google_deadline, when="14d"
                 )
             except Exception:
                 continue
@@ -539,8 +553,8 @@ def fetch_pemprov_portal(deadline: float | None = None) -> FetchReport:
         if items:
             notes.append("Google News site:beritajakarta.id")
 
-    # 2) Scrape HTML singkat bila masih kurang / Google kosong.
-    if len(items) < 8 and time.monotonic() < hard_deadline - 2:
+    # 2) Scrape HTML hanya di luar Vercel (egress portal DKI sering diblok/lambat).
+    if (not on_vercel) and len(items) < 8 and time.monotonic() < hard_deadline - 2:
         try:
             from app.connectors.pemprov_official import fetch_pemprov_official
 
@@ -549,6 +563,8 @@ def fetch_pemprov_portal(deadline: float | None = None) -> FetchReport:
                 notes.append("portal resmi HTML")
         except Exception as exc:
             notes.append(f"portal HTML gagal ({exc.__class__.__name__})")
+    elif on_vercel and not items:
+        notes.append("HTML portal dilewati di Vercel")
 
     note = " + ".join(notes) if notes else ""
     if not items:

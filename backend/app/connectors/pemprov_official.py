@@ -4,7 +4,7 @@ Halaman https://www.jakarta.go.id/berita-jakarta mengagregasi tautan
 beritajakarta.id (kanal berita resmi Pemprov). Fallback: beranda beritajakarta.id.
 Tidak menyimpan HTML penuh — hanya judul, cuplikan singkat, URL, dan waktu terbit.
 
-Versi fetcher: pemprov-official-v3
+Versi fetcher: pemprov-official-v3b
 """
 
 from __future__ import annotations
@@ -52,11 +52,14 @@ def fetch_pemprov_official(limit: int = 24) -> list[RawItem]:
         except Exception as exc:
             return address, None, f"{address}:{exc.__class__.__name__}"
 
-    # Parallel agar 3× timeout tidak menjumlah jadi 12s.
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    # Parallel agar 3× timeout tidak menjumlah jadi 12s; shutdown tanpa menunggu.
+    from concurrent.futures import TimeoutError as FuturesTimeout
+
+    pool = ThreadPoolExecutor(max_workers=3)
+    try:
         futures = [pool.submit(_one, address) for address in LISTING_URLS]
         for future in as_completed(futures, timeout=6):
-            address, payload, err = future.result()
+            address, payload, err = future.result(timeout=0.1)
             if err:
                 errors.append(err)
                 continue
@@ -65,6 +68,10 @@ def fetch_pemprov_official(limit: int = 24) -> list[RawItem]:
             html = payload.decode("utf-8", "replace")
             batch = _parse_listing(html, seen, limit - len(items), base=address)
             items.extend(batch)
+    except (TimeoutError, FuturesTimeout):
+        pass
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
 
     if not items and errors:
         raise RuntimeError("; ".join(errors[:3]))

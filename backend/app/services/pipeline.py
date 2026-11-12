@@ -145,25 +145,29 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
 
             # Portal/Google Pemprov dulu — hard cap agar tidak menggantung.
             try:
-                _consume(fetch_pemprov_portal(deadline=time.monotonic() + 14))
+                _consume(fetch_pemprov_portal(deadline=time.monotonic() + 12))
             except Exception as exc:
                 log.exception("Portal Pemprov gagal: %s", exc)
 
-            theme_deadline = time.monotonic() + 18
-            with ThreadPoolExecutor(max_workers=3) as pool:
+            from concurrent.futures import TimeoutError as FuturesTimeout
+
+            theme_deadline = time.monotonic() + 16
+            pool = ThreadPoolExecutor(max_workers=3)
+            try:
                 futures = [
                     pool.submit(fetch_google_pemprov_dki, theme_deadline),
                     pool.submit(fetch_google_kpw_dki, theme_deadline),
                     pool.submit(fetch_google_kpw_provinsi, theme_deadline),
                 ]
-                try:
-                    for future in as_completed(futures, timeout=20):
-                        try:
-                            _consume(future.result())
-                        except Exception as exc:
-                            log.exception("Arsip tematik gagal: %s", exc)
-                except TimeoutError:
-                    log.warning("Batas waktu arsip tematik Google habis; lanjut RSS.")
+                for future in as_completed(futures, timeout=16):
+                    try:
+                        _consume(future.result(timeout=0.2))
+                    except Exception as exc:
+                        log.exception("Arsip tematik gagal: %s", exc)
+            except (TimeoutError, FuturesTimeout):
+                log.warning("Batas waktu arsip tematik Google habis; lanjut RSS.")
+            finally:
+                pool.shutdown(wait=False, cancel_futures=True)
             # Mode cepat: skip RSS berat bila sudah dapat Pemprov, hemat waktu Vercel.
             reports = []
             if added < 3:
