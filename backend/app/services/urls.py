@@ -69,7 +69,6 @@ _BOT_WALL_HOSTS = (
 
 _TRUSTED_OFFICIAL_HOSTS = (
     "beritajakarta.id",
-    "jakarta.go.id",
 )
 
 
@@ -78,7 +77,11 @@ def is_public_article(url: str) -> bool:
     if "news.google.com" in lowered or "contoh.media-monitor.local" in lowered:
         return False
     # Portal resmi Pemprov: terima meski HEAD/GET bot ditolak.
+    # Hanya beritajakarta + domain utama jakarta.go.id (bukan subdomain spam).
     if _host_in(url, _TRUSTED_OFFICIAL_HOSTS):
+        return True
+    host = urlsplit(url).netloc.lower()
+    if host in {"jakarta.go.id", "www.jakarta.go.id"}:
         return True
     try:
         status = http_status(url)

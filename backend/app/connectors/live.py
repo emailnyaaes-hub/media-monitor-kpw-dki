@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -74,12 +75,11 @@ GOOGLE_KPW_PROVINSI_QUERIES = [
 ]
 
 GOOGLE_PEMPROV_DKI_QUERIES = [
-    'site:jakarta.go.id',
-    'site:beritajakarta.id',
-    '"Pemprov DKI" OR "Pemprov DKI Jakarta"',
-    'site:beritajakarta.id (Pemprov OR "Balai Kota" OR "Gubernur DKI" OR Wagub)',
-    '"Gubernur DKI" OR "Gubernur Jakarta" OR "Pramono Anung" OR "Rano Karno"',
-    '"Jakarta Smart City" OR "Balai Kota Jakarta" OR "Diskominfo Jakarta"',
+    # Hanya beritajakarta.id — site:jakarta.go.id penuh spam subdomain (pajakonline, dll).
+    "site:beritajakarta.id",
+    'site:beritajakarta.id (Pemprov OR Pramono OR "Rano Karno" OR Wagub OR "Balai Kota")',
+    '"Pemprov DKI" OR "Pemprov DKI Jakarta" site:beritajakarta.id',
+    '"Gubernur DKI" OR "Gubernur Jakarta" OR "Pramono Anung" site:beritajakarta.id',
 ]
 
 GOOGLE_BERANDA_QUERIES = [
@@ -440,58 +440,122 @@ def fetch_google_kpw_provinsi(deadline: float | None = None) -> FetchReport:
 
 
 def fetch_google_pemprov_dki(deadline: float | None = None) -> FetchReport:
-    """Tarik berita Pemprov DKI Jakarta dan kanal daerah."""
-    return _fetch_google_archive(
+    """Tarik berita Pemprov DKI Jakarta (utama: beritajakarta.id)."""
+    report = _fetch_google_archive(
         "Google News Pemprov DKI",
         GOOGLE_PEMPROV_DKI_QUERIES,
         deadline=deadline,
-        recent_limit=6,
+        recent_limit=8,
         archive_limit=4,
     )
+    cleaned: list[RawItem] = []
+    for item in report.items:
+        stamped = _stamp_pemprov_official(item)
+        if stamped is None:
+            continue
+        cleaned.append(stamped)
+    report.items = cleaned[:24]
+    if cleaned:
+        report.status = "berhasil"
+        report.message = f"{len(cleaned)} berita Pemprov (beritajakarta.id)."
+    elif report.status == "berhasil":
+        report.status = "gagal"
+        report.message = "Tidak ada URL beritajakarta.id yang lolos saringan."
+    return report
+
+
+def _is_pemprov_official_url(url: str) -> bool:
+    host = urlsplit(url or "").netloc.lower()
+    if host.startswith("www.") or host.startswith("m."):
+        host = host.split(".", 1)[1]
+    if host == "beritajakarta.id" or host.endswith(".beritajakarta.id"):
+        path = urlsplit(url).path.lower()
+        # Artikel utama /read/…; tolak album/siaran-pers kosong judul generik di lapisan lain.
+        return "/read/" in path or "/berita/" in path
+    # Hanya portal utama — bukan subdomain spam (pajakonline, dll).
+    return host == "jakarta.go.id"
+
+
+def _stamp_pemprov_official(item: RawItem) -> RawItem | None:
+    url = canonical_url(item.url) or item.url
+    if not _is_pemprov_official_url(url):
+        return None
+    title = strip_snippet(item.title or "", 300)
+    for suffix in (" - Beritajakarta.id", " - Berita Jakarta", " | Berita Jakarta"):
+        if title.casefold().endswith(suffix.casefold()):
+            title = title[: -len(suffix)].strip()
+    spam = re.search(
+        r"mahjong|scatter|olympus|gates of|slot\b|togel|hip hop panda",
+        title,
+        re.I,
+    )
+    if spam:
+        return None
+    item.url = url.replace("://m.beritajakarta.id", "://www.beritajakarta.id")
+    item.source_name = "Portal Pemprov DKI"
+    item.author_name = "Pemprov DKI Jakarta"
+    item.author_handle = "@dkijakarta"
+    item.location = "DKI Jakarta"
+    item.source_tier = 1
+    item.credibility = max(getattr(item, "credibility", 60) or 60, 85)
+    item.title = title
+    return item
 
 
 def fetch_pemprov_portal(deadline: float | None = None) -> FetchReport:
-    """Portal resmi jakarta.go.id / beritajakarta.id; fallback Google News singkat."""
+    """Utama: Google News site:beritajakarta.id (aman di Vercel). Cadangan: scrape HTML portal."""
     hard_deadline = deadline if deadline is not None else time.monotonic() + 18
     if time.monotonic() > hard_deadline:
         return FetchReport("Portal Pemprov DKI", "gagal", "Batas waktu pengambilan habis.")
     items: list[RawItem] = []
-    note = ""
-    try:
-        from app.connectors.pemprov_official import fetch_pemprov_official
+    notes: list[str] = []
+    seen: set[str] = set()
 
-        items = fetch_pemprov_official(limit=16)
-        note = "portal resmi"
-    except Exception as exc:
-        note = f"portal gagal ({exc.__class__.__name__})"
-    # Fallback singkat (jangan sampai menggantung seluruh Perbarui).
-    if len(items) < 8 and time.monotonic() < hard_deadline - 2:
+    def _push(batch: list[RawItem]) -> None:
+        for item in batch:
+            stamped = _stamp_pemprov_official(item)
+            if stamped is None:
+                continue
+            key = stamped.url.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            items.append(stamped)
+
+    # 1) Google News dulu — Vercel biasanya bisa ke news.google.com, bukan ke portal DKI.
+    if time.monotonic() < hard_deadline - 1:
         since = now_wib() - timedelta(days=14)
-        google_deadline = min(hard_deadline, time.monotonic() + 12)
-        for query in ("site:beritajakarta.id", 'site:beritajakarta.id Pemprov'):
-            if time.monotonic() > google_deadline:
+        google_deadline = min(hard_deadline - 1, time.monotonic() + 11)
+        for query in ("site:beritajakarta.id", 'site:beritajakarta.id (Pemprov OR Pramono)'):
+            if time.monotonic() > google_deadline or len(items) >= 16:
                 break
             try:
                 batch, _failed = _google_query(
-                    query, since, limit=6, deadline=google_deadline, when="7d"
+                    query, since, limit=10, deadline=google_deadline, when="14d"
                 )
             except Exception:
                 continue
-            for item in batch:
-                item.source_name = "Berita Jakarta"
-                item.author_name = "Pemprov DKI Jakarta"
-                item.author_handle = "@dkijakarta"
-                item.location = "DKI Jakarta"
-                item.credibility = max(getattr(item, "credibility", 60) or 60, 80)
-                if all(existing.url.casefold() != item.url.casefold() for existing in items):
-                    items.append(item)
+            _push(batch)
         if items:
-            note = (note + " + Google News").strip(" +") if note else "Google News site:beritajakarta.id"
+            notes.append("Google News site:beritajakarta.id")
+
+    # 2) Scrape HTML singkat bila masih kurang / Google kosong.
+    if len(items) < 8 and time.monotonic() < hard_deadline - 2:
+        try:
+            from app.connectors.pemprov_official import fetch_pemprov_official
+
+            _push(fetch_pemprov_official(limit=16))
+            if any("beritajakarta.id/read/" in (i.url or "") for i in items):
+                notes.append("portal resmi HTML")
+        except Exception as exc:
+            notes.append(f"portal HTML gagal ({exc.__class__.__name__})")
+
+    note = " + ".join(notes) if notes else ""
     if not items:
         return FetchReport(
             "Portal Pemprov DKI",
             "gagal",
-            f"Tidak ada berita Pemprov dari portal resmi maupun Google News. {note}",
+            f"Tidak ada berita Pemprov dari Google News maupun portal resmi. {note}",
         )
     return FetchReport(
         "Portal Pemprov DKI",

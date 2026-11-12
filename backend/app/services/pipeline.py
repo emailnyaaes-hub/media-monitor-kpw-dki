@@ -143,13 +143,13 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
                 fetch_pemprov_portal,
             )
 
-            # Portal resmi Pemprov dulu — hard cap agar tidak menggantung.
+            # Portal/Google Pemprov dulu — hard cap agar tidak menggantung.
             try:
-                _consume(fetch_pemprov_portal(deadline=time.monotonic() + 16))
+                _consume(fetch_pemprov_portal(deadline=time.monotonic() + 14))
             except Exception as exc:
                 log.exception("Portal Pemprov gagal: %s", exc)
 
-            theme_deadline = time.monotonic() + 20
+            theme_deadline = time.monotonic() + 18
             with ThreadPoolExecutor(max_workers=3) as pool:
                 futures = [
                     pool.submit(fetch_google_pemprov_dki, theme_deadline),
@@ -157,7 +157,7 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
                     pool.submit(fetch_google_kpw_provinsi, theme_deadline),
                 ]
                 try:
-                    for future in as_completed(futures, timeout=22):
+                    for future in as_completed(futures, timeout=20):
                         try:
                             _consume(future.result())
                         except Exception as exc:
