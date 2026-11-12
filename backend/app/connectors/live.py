@@ -97,10 +97,38 @@ class FetchReport:
     items: list[RawItem] = field(default_factory=list)
 
 
-def collect_reports(since: datetime, rules: list | None = None, mode: str = "penuh") -> list[FetchReport]:
+def collect_thematic_reports(deadline: float | None = None) -> list[FetchReport]:
+    """Tarik KPw DKI + KPw Provinsi + Pemprov secara paralel (disimpan per laporan di pipeline)."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    started = time.monotonic()
+    theme_deadline = deadline if deadline is not None else started + 22
+    reports: list[FetchReport] = []
+    with ThreadPoolExecutor(max_workers=3) as theme_pool:
+        theme_futures = [
+            theme_pool.submit(fetch_google_kpw_dki, theme_deadline),
+            theme_pool.submit(fetch_google_kpw_provinsi, theme_deadline),
+            theme_pool.submit(fetch_google_pemprov_dki, theme_deadline),
+        ]
+        for future in as_completed(theme_futures, timeout=max(12, theme_deadline - time.monotonic() + 2)):
+            try:
+                reports.append(future.result())
+            except Exception as exc:
+                reports.append(
+                    FetchReport("Google News tematik", "gagal", f"Arsip tematik gagal: {exc.__class__.__name__}")
+                )
+    return reports
+
+
+def collect_reports(
+    since: datetime,
+    rules: list | None = None,
+    mode: str = "penuh",
+    include_thematic: bool = True,
+) -> list[FetchReport]:
     """Ambil laporan sumber.
 
-    mode=cepat: hanya RSS langsung (tombol Perbarui, target di bawah 1 menit).
+    mode=cepat: RSS langsung (+ tematik bila include_thematic).
     mode=penuh: semua sumber, dengan batas waktu agar tidak menggantung di Vercel.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -111,21 +139,8 @@ def collect_reports(since: datetime, rules: list | None = None, mode: str = "pen
     budget = 75 if mode == "cepat" else 180
     try:
         reports: list[FetchReport] = []
-        # PRIORITAS: tiga rubrik tematik paralel agar tidak ada yang kehabisan waktu.
-        theme_deadline = started + (22 if mode == "cepat" else 70)
-        with ThreadPoolExecutor(max_workers=3) as theme_pool:
-            theme_futures = [
-                theme_pool.submit(fetch_google_kpw_dki, theme_deadline),
-                theme_pool.submit(fetch_google_kpw_provinsi, theme_deadline),
-                theme_pool.submit(fetch_google_pemprov_dki, theme_deadline),
-            ]
-            for future in as_completed(theme_futures, timeout=max(12, theme_deadline - time.monotonic() + 2)):
-                try:
-                    reports.append(future.result())
-                except Exception as exc:
-                    reports.append(
-                        FetchReport("Google News tematik", "gagal", f"Arsip tematik gagal: {exc.__class__.__name__}")
-                    )
+        if include_thematic:
+            reports.extend(collect_thematic_reports(deadline=started + (22 if mode == "cepat" else 70)))
         with ThreadPoolExecutor(max_workers=6) as pool:
             futures = {
                 pool.submit(fetch_direct, name, tier, url, since): name

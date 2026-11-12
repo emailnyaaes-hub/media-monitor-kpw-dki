@@ -104,16 +104,17 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
         rules = load_rules(db)
         db.commit()
         log.info("Pengambilan %s mulai. Jendela sejak %s", mode, since.isoformat(timespec="minutes"))
-        reports = collect_reports(since, rules, mode=mode)
         added = skipped = rejected = invalid = 0
         summaries = []
         any_ok = False
-        for report in reports:
+
+        def _consume(report) -> None:
+            nonlocal added, skipped, rejected, invalid, any_ok
             if report.status == "tidak_tersedia":
                 summaries.append(
                     {"name": report.name, "status": report.status, "found": 0, "added": 0, "message": report.message[:300]}
                 )
-                continue
+                return
             result = _store_report(db, report, keywords, queries, rules, started)
             added += result["added"]
             skipped += result["skipped"]
@@ -121,7 +122,43 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
             invalid += result["invalid_url"]
             any_ok = any_ok or report.status == "berhasil"
             summaries.append(result["summary"])
-            log.info("%s | %s | ditemukan %s | baru %s | %s", report.name, report.status, result["summary"]["found"], result["added"], report.message)
+            log.info(
+                "%s | %s | ditemukan %s | baru %s | %s",
+                report.name,
+                report.status,
+                result["summary"]["found"],
+                result["added"],
+                report.message,
+            )
+
+        # Tematik dulu dan langsung disimpan — bila Vercel timeout, rubrik tetap terisi.
+        if mode == "cepat":
+            import time
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+
+            from app.connectors.live import (
+                fetch_google_kpw_dki,
+                fetch_google_kpw_provinsi,
+                fetch_google_pemprov_dki,
+            )
+
+            theme_deadline = time.monotonic() + 28
+            with ThreadPoolExecutor(max_workers=3) as pool:
+                futures = [
+                    pool.submit(fetch_google_kpw_dki, theme_deadline),
+                    pool.submit(fetch_google_kpw_provinsi, theme_deadline),
+                    pool.submit(fetch_google_pemprov_dki, theme_deadline),
+                ]
+                for future in as_completed(futures, timeout=32):
+                    try:
+                        _consume(future.result())
+                    except Exception as exc:
+                        log.exception("Arsip tematik gagal: %s", exc)
+            reports = collect_reports(since, rules, mode=mode, include_thematic=False)
+        else:
+            reports = collect_reports(since, rules, mode=mode, include_thematic=True)
+        for report in reports:
+            _consume(report)
         # Mode cepat: simpan mention saja. Susunan isu/saran ditunda agar UI tidak timeout.
         created = 0
         alerts = 0
