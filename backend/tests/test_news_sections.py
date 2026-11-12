@@ -104,6 +104,31 @@ class NewsSectionTests(unittest.TestCase):
             ),
             "pemprov_dki",
         )
+        # Portal resmi tidak boleh tergeser label NLP «Ekonomi Jakarta» / is_kpw.
+        self.assertEqual(
+            classify_feed_section(
+                row(
+                    title="Pramono Minta Jalan Longsor di Pasar Minggu Ditangani Permanen",
+                    source_name="Portal Pemprov DKI",
+                    author_name="Pemprov DKI Jakarta",
+                    location="DKI Jakarta",
+                    category="Ekonomi Jakarta",
+                    is_kpw=True,
+                    url="https://www.beritajakarta.id/read/156748/pramono-minta-jalan-longsor",
+                )
+            ),
+            "pemprov_dki",
+        )
+        self.assertEqual(
+            classify_feed_section(
+                row(
+                    title="BI dan Pemprov DKI Perkuat Sinergi Investasi",
+                    source_name="Portal Pemprov DKI",
+                    url="https://www.beritajakarta.id/read/156689/bi-dan-pemprov",
+                )
+            ),
+            "kpw_dki",
+        )
 
     def test_bi_nasional(self):
         self.assertEqual(

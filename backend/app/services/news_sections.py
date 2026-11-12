@@ -170,6 +170,9 @@ def classify_feed_section(row: Mention) -> str:
     hay = f"{row.title or ''}\n{row.text or ''}\n{row.source_name or ''}\n{row.author_name or ''}\n{row.author_handle or ''}\n{row.location or ''}"
     folded = hay.casefold()
 
+    # Portal resmi Pemprov / beritajakarta.id dulu — jangan tergeser NLP «Ekonomi Jakarta»/is_kpw.
+    if _official_pemprov_source(row) and not _pemprov_bi_collab(folded, row):
+        return "pemprov_dki"
     if _is_kpw_dki(folded, row):
         return "kpw_dki"
     if _is_kpw_provinsi(folded, row):
@@ -179,6 +182,17 @@ def classify_feed_section(row: Mention) -> str:
     if _is_bi_nasional(folded, row):
         return "bi_nasional"
     return "beranda"
+
+
+def _pemprov_bi_collab(folded: str, row: Mention) -> bool:
+    """Kolaborasi BI/KPw + Pemprov tetap ke rubrik KPw DKI."""
+    if _KPW_DKI.search(folded) or any(h in folded for h in _KPW_DKI_HANDLES):
+        return True
+    if "bi dki" in folded or "bi dan pemprov" in folded or "kpw" in folded:
+        return True
+    if re.search(r"\bbank\s+indonesia\b", folded) and re.search(r"\b(?:pemprov|dki|jakarta)\b", folded):
+        return True
+    return False
 
 
 _KPW_DKI_NEEDLES = (
@@ -282,11 +296,11 @@ def _soft_kpw_provinsi(row: Mention) -> bool:
 
 def _soft_pemprov_dki(row: Mention) -> bool:
     """Cadangan: sinyal Pemprov/Pemda DKI tanpa wajib frasa lengkap."""
+    hay = f"{row.title or ''} {row.text or ''} {row.location or ''} {row.author_name or ''} {row.author_handle or ''}".casefold()
+    if _official_pemprov_source(row) and not _pemprov_bi_collab(hay, row):
+        return True
     if classify_feed_section(row) in {"kpw_dki", "kpw_provinsi"}:
         return False
-    if _official_pemprov_source(row):
-        return True
-    hay = f"{row.title or ''} {row.text or ''} {row.location or ''} {row.author_name or ''} {row.author_handle or ''}".casefold()
     if any(needle in hay for needle in _PEMPROV_DKI_NEEDLES):
         return True
     if re.search(r"\b(?:gubernur|wagub|pemda|dinas)\b", hay) and re.search(r"\b(?:dki|jakarta)\b", hay):
@@ -338,6 +352,9 @@ def _has_bi_signal(folded: str, row: Mention) -> bool:
 
 
 def _is_kpw_dki(folded: str, row: Mention) -> bool:
+    # Jangan tarik berita portal Pemprov ke KPw kecuali kolaborasi BI eksplisit.
+    if _official_pemprov_source(row) and not _pemprov_bi_collab(folded, row):
+        return False
     explicit_dki = bool(_KPW_DKI.search(folded)) or any(handle in folded for handle in _KPW_DKI_HANDLES)
     # KPw provinsi lain selalu menang — termasuk bila NLP salah label «Kegiatan KPw DKI».
     if _other_kpw_province_hit(folded) and not explicit_dki:
