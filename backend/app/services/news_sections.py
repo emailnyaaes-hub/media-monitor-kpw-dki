@@ -336,12 +336,9 @@ def _has_bi_signal(folded: str, row: Mention) -> bool:
 
 
 def _is_kpw_dki(folded: str, row: Mention) -> bool:
-    # KPw provinsi lain selalu menang atas sinyal Jakarta generik.
-    if _other_kpw_province_hit(folded) and not (
-        bool(_KPW_DKI.search(folded))
-        or any(handle in folded for handle in _KPW_DKI_HANDLES)
-        or row.category == "Kegiatan KPw DKI"
-    ):
+    explicit_dki = bool(_KPW_DKI.search(folded)) or any(handle in folded for handle in _KPW_DKI_HANDLES)
+    # KPw provinsi lain selalu menang — termasuk bila NLP salah label «Kegiatan KPw DKI».
+    if _other_kpw_province_hit(folded) and not explicit_dki:
         return False
 
     program_hit = bool(_KPW_DKI_PROGRAMS.search(folded))
@@ -353,10 +350,9 @@ def _is_kpw_dki(folded: str, row: Mention) -> bool:
         program_hit = False
 
     explicit = (
-        row.category == "Kegiatan KPw DKI"
-        or bool(_KPW_DKI.search(folded))
+        (row.category == "Kegiatan KPw DKI" and not _other_kpw_province_hit(folded))
+        or explicit_dki
         or program_hit
-        or any(handle in folded for handle in _KPW_DKI_HANDLES)
     )
     # Perluas: berita BI/KPw yang menyinggung Jakarta/DKI masuk rubrik KPw DKI
     # (bukan KPw provinsi lain).

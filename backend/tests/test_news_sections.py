@@ -62,6 +62,17 @@ class NewsSectionTests(unittest.TestCase):
         ]
         for title in samples:
             self.assertEqual(classify_feed_section(row(title=title)), "kpw_provinsi", title)
+        # NLP kadang salah label kategori DKI — sinyal provinsi harus menang.
+        self.assertEqual(
+            classify_feed_section(
+                row(
+                    title="Kantor Perwakilan Bank Indonesia Provinsi Jawa Barat (KPwBI Jabar) akselerasi",
+                    category="Kegiatan KPw DKI",
+                    is_kpw=True,
+                )
+            ),
+            "kpw_provinsi",
+        )
 
     def test_other_kpw_excludes_dki_only_story(self):
         self.assertEqual(
