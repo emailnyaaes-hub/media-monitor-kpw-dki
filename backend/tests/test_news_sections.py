@@ -53,10 +53,14 @@ class NewsSectionTests(unittest.TestCase):
             self.assertEqual(classify_feed_section(row(title=title)), "kpw_dki", title)
 
     def test_kpw_provinsi_not_dki(self):
-        self.assertEqual(
-            classify_feed_section(row(title="KPw BI Jawa Barat bahas inflasi daerah")),
-            "kpw_provinsi",
-        )
+        samples = [
+            "KPw BI Jawa Barat bahas inflasi daerah",
+            "Kantor Perwakilan Bank Indonesia Provinsi Bali gelar edukasi QRIS",
+            "KPwBI Sumatera Utara pantau TPID",
+            "BI Jawa Timur perkuat UMKM daerah",
+        ]
+        for title in samples:
+            self.assertEqual(classify_feed_section(row(title=title)), "kpw_provinsi", title)
 
     def test_other_kpw_excludes_dki_only_story(self):
         self.assertEqual(
@@ -69,10 +73,14 @@ class NewsSectionTests(unittest.TestCase):
         )
 
     def test_pemprov_dki(self):
-        self.assertEqual(
-            classify_feed_section(row(title="Pemprov DKI Jakarta luncurkan Jakarta Smart City")),
-            "pemprov_dki",
-        )
+        samples = [
+            "Pemprov DKI Jakarta luncurkan Jakarta Smart City",
+            "Balai Kota Jakarta gelar operasi Satpol PP",
+            "Gubernur DKI Pramono Anung tinjau banjir",
+            "Diskominfo Jakarta perbarui Jakartasatu",
+        ]
+        for title in samples:
+            self.assertEqual(classify_feed_section(row(title=title)), "pemprov_dki", title)
 
     def test_bi_nasional(self):
         self.assertEqual(

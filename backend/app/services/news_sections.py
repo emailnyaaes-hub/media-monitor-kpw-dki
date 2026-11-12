@@ -203,10 +203,37 @@ _KPW_DKI_NEEDLES = (
     "jakarta youth leadership",
     "jakarta international investment",
     "kuis interaktif tentang literasi",
-    "pemprov dki",
+    "bi dan pemprov dki",
     "jitex",
     "isef",
     " jef",
+)
+
+_KPW_PROVINSI_NEEDLES = (
+    "kpw bi",
+    "kpwbi",
+    "kantor perwakilan bank indonesia",
+    "kantor perwakilan bi",
+)
+
+_PEMPROV_DKI_NEEDLES = (
+    "pemprov dki",
+    "pemprov jakarta",
+    "pemerintah provinsi dki",
+    "pemerintah provinsi jakarta",
+    "balai kota jakarta",
+    "diskominfo jakarta",
+    "bappeda jakarta",
+    "satpol pp jakarta",
+    "jakarta smart city",
+    "jakartasatu",
+    "jakarta pintu",
+    "pramono anung",
+    "gubernur dki",
+    "gubernur jakarta",
+    "wagub dki",
+    "@dkijakarta",
+    "@pemprovdki",
 )
 
 
@@ -220,12 +247,18 @@ def row_matches_feed_section(row: Mention, section: str) -> bool:
         return True
     if section == "kpw_dki" and _soft_kpw_dki(row):
         return True
+    if section == "kpw_provinsi" and _soft_kpw_provinsi(row):
+        return True
+    if section == "pemprov_dki" and _soft_pemprov_dki(row):
+        return True
     return False
 
 
 def _soft_kpw_dki(row: Mention) -> bool:
     """Cadangan longgar: keyword katalog / flag lokal supaya rubrik tidak kosong."""
     hay = f"{row.title or ''} {row.text or ''} {row.location or ''} {row.author_name or ''}".casefold()
+    if _other_kpw_province_hit(hay):
+        return False
     if any(needle in hay for needle in _KPW_DKI_NEEDLES):
         return True
     if row.category in {"Kegiatan KPw DKI", "Ekonomi Jakarta"}:
@@ -235,20 +268,52 @@ def _soft_kpw_dki(row: Mention) -> bool:
     return False
 
 
+def _soft_kpw_provinsi(row: Mention) -> bool:
+    """Cadangan: KPw/kantor perwakilan di luar DKI."""
+    if classify_feed_section(row) == "kpw_dki":
+        return False
+    hay = f"{row.title or ''} {row.text or ''} {row.location or ''} {row.author_name or ''}".casefold()
+    if not any(needle in hay for needle in _KPW_PROVINSI_NEEDLES) and not getattr(row, "is_kpw", False):
+        return False
+    if re.search(r"\b(?:dki\s+)?jakarta\b|\bdki\b", hay) and not _other_kpw_province_hit(hay):
+        return False
+    return _other_kpw_province_hit(hay) or any(name.casefold() in hay for name in _OTHER_PROVINCES)
+
+
+def _soft_pemprov_dki(row: Mention) -> bool:
+    """Cadangan: sinyal Pemprov/Pemda DKI tanpa wajib frasa lengkap."""
+    if classify_feed_section(row) in {"kpw_dki", "kpw_provinsi"}:
+        return False
+    hay = f"{row.title or ''} {row.text or ''} {row.location or ''} {row.author_name or ''} {row.author_handle or ''}".casefold()
+    if any(needle in hay for needle in _PEMPROV_DKI_NEEDLES):
+        return True
+    if re.search(r"\b(?:gubernur|wagub|pemda|dinas)\b", hay) and re.search(r"\b(?:dki|jakarta)\b", hay):
+        if not re.search(r"\b(?:bank\s+indonesia|\bbi\b|kpw)\b", hay):
+            return True
+    return False
+
+
 def select_for_feed_section(rows: list, section: str) -> list:
-    """Filter rubrik; jika KPw DKI masih kosong, longgarkan ke sinyal Jakarta/KPw."""
+    """Filter rubrik; jika masih kosong, longgarkan ke soft-match / sinyal terkait."""
     if not section or section == "beranda":
         return list(rows)
     matched = [row for row in rows if row_matches_feed_section(row, section)]
-    if matched or section != "kpw_dki":
+    if matched:
         return matched
-    # Last resort: semua mention yang menyebut Jakarta/DKI dalam jendela.
-    loose = []
-    for row in rows:
-        hay = f"{row.title or ''} {row.text or ''} {row.location or ''}".casefold()
-        if "jakarta" in hay or re.search(r"\bdki\b", hay) or getattr(row, "is_kpw", False):
-            loose.append(row)
-    return loose
+    if section == "kpw_dki":
+        loose = []
+        for row in rows:
+            hay = f"{row.title or ''} {row.text or ''} {row.location or ''}".casefold()
+            if _other_kpw_province_hit(hay):
+                continue
+            if "jakarta" in hay or re.search(r"\bdki\b", hay) or getattr(row, "is_kpw", False):
+                loose.append(row)
+        return loose
+    if section == "kpw_provinsi":
+        return [row for row in rows if _soft_kpw_provinsi(row)]
+    if section == "pemprov_dki":
+        return [row for row in rows if _soft_pemprov_dki(row)]
+    return matched
 
 
 def _has_jakarta(folded: str, row: Mention) -> bool:
@@ -320,37 +385,44 @@ def _other_kpw_province_hit(folded: str) -> bool:
 def _is_kpw_provinsi(folded: str, row: Mention) -> bool:
     if _is_kpw_dki(folded, row):
         return False
-    if not _KPW_MARKERS.search(folded) and "kantor perwakilan" not in folded:
-        if not any(name.casefold() in folded for name in _OTHER_PROVINCES):
-            return False
     for pattern in _KPW_OTHER_PROVINCE:
         if pattern.search(folded):
             return True
     for name in _OTHER_PROVINCES:
         if name.casefold() in folded and (
-            _KPW_MARKERS.search(folded) or "kantor perwakilan bank indonesia" in folded
+            _KPW_MARKERS.search(folded)
+            or "kantor perwakilan bank indonesia" in folded
+            or "kantor perwakilan bi" in folded
+            or re.search(r"\bbi\s+" + re.escape(name.casefold()) + r"\b", folded)
         ):
             return True
-    if re.search(r"\bkpw\s*bi\b", folded, re.I) and _other_kpw_province_hit(folded):
+    if (_KPW_MARKERS.search(folded) or "kantor perwakilan" in folded) and _other_kpw_province_hit(folded):
+        return True
+    if re.search(r"\bkpw\s*bi\b", folded, re.I) and any(name.casefold() in folded for name in _OTHER_PROVINCES):
         return True
     return False
 
 
 def _is_pemprov_dki(folded: str, row: Mention) -> bool:
-    if _BI_NASIONAL.search(folded) and not _PEMPROV_DKI.search(folded):
-        if not any(h in folded for h in _PEMPROV_HANDLES):
-            return False
+    # Kolaborasi BI+Pemprov tetap prioritas KPw DKI (sudah dicek di atas).
+    if _KPW_DKI.search(folded) or any(h in folded for h in _KPW_DKI_HANDLES):
+        return False
     if _PEMPROV_DKI.search(folded):
         return True
     if any(h in folded for h in _PEMPROV_HANDLES):
         return True
-    if re.search(r"\b(?:gubernur|wagub)\s+(?:dki\s+)?jakarta\b", folded) and "bank indonesia" not in folded:
+    if re.search(r"\b(?:gubernur|wagub)\s+(?:dki\s+)?jakarta\b", folded):
+        if not re.search(r"\b(?:bank\s+indonesia|\bkpw\b)\b", folded):
+            return True
+    if "pramono anung" in folded and re.search(r"\b(?:jakarta|dki|gubernur)\b", folded):
         return True
     if row.category == "Ekonomi Jakarta" and _PEMPROV_DKI.search(folded):
         return True
     if row.category == "Ekonomi Jakarta" and not _BI_NASIONAL.search(folded):
         if re.search(r"\b(?:pemprov|pemda|dinas\s+|jakarta\s+pintu)\b", folded):
             return True
+    if _BI_NASIONAL.search(folded) and not _PEMPROV_DKI.search(folded):
+        return False
     return False
 
 

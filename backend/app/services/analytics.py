@@ -603,9 +603,9 @@ def search_mentions(db: Session, window: dict, params: dict) -> dict:
         if params.get("hour") not in (None, "") and row.published_at.hour != int(params["hour"]):
             continue
         live = classify_feed_section(row)
-        if feed_section == "kpw_dki" and live != "kpw_dki":
-            # Mention yang lolos soft-match ditandai agar rubrik konsisten.
-            live = "kpw_dki"
+        if feed_section in {"kpw_dki", "kpw_provinsi", "pemprov_dki"} and live != feed_section:
+            # Soft-match / fallback rubrik: tandai agar tampilan konsisten.
+            live = feed_section
         if (row.feed_section or "beranda") != live:
             row.feed_section = live
             dirty = True
