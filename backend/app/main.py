@@ -85,17 +85,21 @@ def _mount_frontend() -> None:
     if not index.is_file():
         return
     root = DIST.resolve()
+    # index.html wajib selalu diambil ulang; aset ber-hash boleh di-cache lama.
+    no_store = {"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", "Pragma": "no-cache"}
+    immutable = {"Cache-Control": "public, max-age=31536000, immutable"}
 
     @app.get("/", include_in_schema=False)
     def spa_index():
-        return FileResponse(index)
+        return FileResponse(index, headers=no_store)
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa(full_path: str):
         candidate = (DIST / full_path).resolve()
         if candidate.is_file() and str(candidate).startswith(str(root)):
-            return FileResponse(candidate)
-        return FileResponse(index)
+            headers = immutable if candidate.suffix in {".js", ".css", ".woff2", ".woff", ".png", ".svg", ".jpg", ".webp"} else no_store
+            return FileResponse(candidate, headers=headers)
+        return FileResponse(index, headers=no_store)
 
 
 _mount_frontend()

@@ -34,8 +34,8 @@ const CATEGORIES = [
 ]
 
 const TOUR = [
-  'Ringkasan dibaca seperti beranda berita. Mulai dari judul utama, lalu Terpopuler di kanan.',
-  'Pilih rubrik di atas daftar, misalnya Rupiah atau KPw DKI, untuk mengganti kanal.',
+  'Ringkasan dibaca seperti kanal berita. Mulai dari judul utama, lalu Terpopuler di kanan.',
+  'Pilih rubrik di atas daftar, misalnya Berita Nasional atau KPw DKI, untuk mengganti kanal.',
   'Klik judul untuk membuka berita asli di tab baru. Lihat semua membuka seluruh daftar.',
   'Filter tanggal dan platform tetap di header. Chip aktif bisa dihapus.',
 ]
