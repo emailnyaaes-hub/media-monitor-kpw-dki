@@ -1049,10 +1049,17 @@ def ingest_status(db: Session = Depends(get_db), _: CurrentUser = Depends(get_cu
 def job_ingest(
     mode: str = Query(default="cepat", pattern="^(cepat|penuh)$"),
     wait: bool = Query(default=False),
+    force: bool = Query(default=False),
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(require_writer),
 ):
     """mode=cepat: RSS langsung. Di Vercel wajib sinkron agar proses tidak terbunuh."""
+    from app.services.pipeline import _set_running, ingest_running
+
+    # Tombol Perbarui: bersihkan kunci macet dari request Vercel yang timeout.
+    if force or wait:
+        if ingest_running(db):
+            _set_running(db, False)
     on_vercel = os.environ.get("VERCEL") == "1" or os.environ.get("VERCEL_ENV")
     if wait or on_vercel:
         return ingest(db, mode=mode)

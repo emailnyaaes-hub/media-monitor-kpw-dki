@@ -322,28 +322,40 @@ function readViews(): SavedView[] {
 function RefreshBar() {
   const { user } = useAuth()
   const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState('')
   const canRefresh = user?.role === 'admin' || user?.role === 'analis'
   if (!canRefresh) return null
 
   async function refresh() {
     setBusy(true)
+    setNote('Mengambil sumber… bisa 30–60 detik.')
     try {
-      try {
-        await api('/api/jobs/retag', { method: 'POST' })
-      } catch {
-        /* retag opsional bila bukan admin */
+      // Jangan retag dulu — retag seluruh arsip sering timeout di Vercel sebelum ingest jalan.
+      const result = await api<{ status: string; added?: number; skipped?: number; message?: string }>(
+        '/api/jobs/ingest?mode=cepat&wait=true&force=true',
+        { method: 'POST' },
+      )
+      if (result.status === 'sedang_berjalan') {
+        setNote('Pengambilan lain masih berjalan. Tunggu sebentar lalu coba lagi.')
+        return
       }
-      await api('/api/jobs/ingest?mode=cepat&wait=true', { method: 'POST' })
-    } catch {
-      /* UI tetap sederhana */
+      if (result.status === 'gagal') {
+        setNote(result.message || 'Pengambilan gagal. Coba lagi.')
+        return
+      }
+      const added = result.added ?? 0
+      setNote(added > 0 ? `Selesai: ${added} berita baru. Memuat ulang…` : 'Selesai: belum ada berita baru dari sumber. Memuat ulang…')
+      window.setTimeout(() => window.location.reload(), 900)
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : 'Pengambilan gagal.')
     } finally {
       setBusy(false)
-      window.location.reload()
     }
   }
 
   return (
-    <div className="flex justify-end border-t border-line px-4 py-2 md:px-6">
+    <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line px-4 py-2 md:px-6">
+      {note ? <p className="max-w-md text-right text-sm text-muted" role="status">{note}</p> : null}
       <button
         type="button"
         className="no-briefing h-9 rounded-md bg-navy-900 px-4 text-sm text-white disabled:opacity-60"

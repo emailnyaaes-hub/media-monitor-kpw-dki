@@ -21,7 +21,7 @@ from app.services.urls import canonical_url, is_public_article
 
 log = logging.getLogger("bi.ingest")
 ingest_lock = threading.Lock()
-INGEST_STALE_MINUTES = 6
+INGEST_STALE_MINUTES = 2
 
 CITIES = [
     "Kepulauan Seribu",
@@ -168,6 +168,9 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
                 log.warning("Batas waktu arsip tematik Google habis; lanjut RSS.")
             finally:
                 pool.shutdown(wait=False, cancel_futures=True)
+            # Stempel lebih awal agar timeout Vercel tidak meninggalkan last_ingest basi.
+            db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
+            db.commit()
             # Mode cepat: skip RSS berat bila sudah dapat Pemprov, hemat waktu Vercel.
             reports = []
             if added < 3:
