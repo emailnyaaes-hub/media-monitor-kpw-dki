@@ -110,7 +110,8 @@ html.analisis .surface-section {
   .reveal-delay-3 { animation-delay: 180ms; }
 
   .skeleton {
-    @apply relative overflow-hidden rounded-sm bg-line/70;
+    @apply relative overflow-hidden rounded-sm;
+    background: color-mix(in srgb, var(--line) 70%, transparent);
   }
 
   .skeleton::after {
