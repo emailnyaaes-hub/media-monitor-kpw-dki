@@ -7,7 +7,6 @@ import { useFilters } from '../filters'
 import { formatDay, PLATFORM_LABEL } from '../format'
 import { useTheme } from '../theme'
 import type { AlertItem } from '../types'
-import CommandPalette from './CommandPalette'
 import { BiLogo, Copyright, Logo, UNIT } from './Logo'
 import { inputClass } from './Ui'
 
@@ -43,8 +42,7 @@ const CATEGORIES = [
 const TOUR = [
   'Ringkasan dibaca seperti kanal berita. Mulai dari judul utama, lalu berita di bawahnya.',
   'Pilih rubrik di atas daftar, misalnya Berita Nasional atau KPw DKI, untuk mengganti kanal.',
-  'Tekan ⌘K / Ctrl+K untuk perintah cepat: cari berita atau loncat menu.',
-  'Mode briefing membesarkan teks; mode analisis merapatkan layout data.',
+  'Mode briefing membesarkan teks agar nyaman dibaca di layar presentasi.',
 ]
 
 interface SavedView {
@@ -62,10 +60,8 @@ export default function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [open, setOpen] = useState(false)
-  const [cmdOpen, setCmdOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [briefing, setBriefing] = useState(() => document.documentElement.classList.contains('briefing'))
-  const [analisis, setAnalisis] = useState(() => document.documentElement.classList.contains('analisis'))
   const [tourStep, setTourStep] = useState<number | null>(null)
   const [viewName, setViewName] = useState('')
   const [views, setViews] = useState<SavedView[]>(() => readViews())
@@ -103,36 +99,11 @@ export default function Layout() {
     if (!localStorage.getItem('bi-tour-done')) setTourStep(0)
   }, [])
 
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      const meta = event.metaKey || event.ctrlKey
-      if (meta && event.key.toLowerCase() === 'k') {
-        event.preventDefault()
-        setCmdOpen((value) => !value)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
-
   function toggleBriefing() {
     const next = !briefing
     setBriefing(next)
     document.documentElement.classList.toggle('briefing', next)
-    if (next) {
-      setAnalisis(false)
-      document.documentElement.classList.remove('analisis')
-    }
-  }
-
-  function toggleAnalisis() {
-    const next = !analisis
-    setAnalisis(next)
-    document.documentElement.classList.toggle('analisis', next)
-    if (next) {
-      setBriefing(false)
-      document.documentElement.classList.remove('briefing')
-    }
+    if (next) document.documentElement.classList.remove('analisis')
   }
 
   function search(event: FormEvent) {
@@ -247,21 +218,8 @@ export default function Layout() {
               </div>
             </details>
             <div className="ml-auto flex items-center gap-2">
-              <button
-                type="button"
-                className="no-briefing hidden h-11 items-center gap-2 rounded-md border border-line px-3 text-sm text-muted hover:text-ink md:inline-flex"
-                onClick={() => setCmdOpen(true)}
-                aria-label="Perintah cepat"
-              >
-                <Search size={14} aria-hidden />
-                <span>Perintah</span>
-                <kbd className="rounded-sm border border-line px-1 text-[10px]">⌘K</kbd>
-              </button>
               <button className="h-11 rounded-md border border-line px-3 text-sm" onClick={toggleBriefing} aria-pressed={briefing}>
                 {briefing ? 'Keluar briefing' : 'Briefing'}
-              </button>
-              <button className="no-briefing h-11 rounded-md border border-line px-3 text-sm" onClick={toggleAnalisis} aria-pressed={analisis}>
-                {analisis ? 'Keluar analisis' : 'Analisis'}
               </button>
               <button className="no-briefing relative grid h-11 w-11 place-items-center rounded-md border border-line" aria-label="Notifikasi" onClick={() => navigate('/alert')}>
                 <Bell size={18} />
@@ -331,7 +289,6 @@ export default function Layout() {
           )
         })}
       </nav>
-      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
       {tourStep !== null && (
         <div className="no-briefing fixed inset-x-0 bottom-14 z-50 border-t border-line bg-card p-4 shadow-none md:bottom-0 md:left-60" role="dialog" aria-labelledby="tour-title">
           <p id="tour-title" className="text-sm text-muted">Langkah {tourStep + 1} dari {TOUR.length}</p>
