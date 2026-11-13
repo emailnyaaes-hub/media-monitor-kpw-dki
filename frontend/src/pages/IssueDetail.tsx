@@ -73,7 +73,7 @@ export default function IssueDetailPage() {
 
   return (
     <div>
-      <button className="mb-3 text-base text-muted underline" onClick={() => navigate('/isu')}>Kembali ke Isu & Tren</button>
+      <button className="mb-3 text-base text-muted underline" onClick={() => navigate('/suara')}>Kembali ke Suara Publik</button>
       {issue.loading && <Loading />}
       {issue.error && <ErrorNote message={issue.error} />}
       {data && (

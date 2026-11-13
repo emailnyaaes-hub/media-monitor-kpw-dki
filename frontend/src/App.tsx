@@ -5,7 +5,6 @@ import AdvicePage from './pages/Advice'
 import AlertsPage from './pages/Alerts'
 import ExplorerPage from './pages/Explorer'
 import IssueDetailPage from './pages/IssueDetail'
-import IssuesPage from './pages/Issues'
 import KeywordsPage from './pages/Keywords'
 import Login from './pages/Login'
 import OverviewPage from './pages/Overview'
@@ -32,7 +31,7 @@ export default function App() {
         <Route path="/review" element={<ReviewPage />} />
         <Route path="/saran" element={<AdvicePage />} />
         <Route path="/sentimen" element={<SentimentPage />} />
-        <Route path="/isu" element={<IssuesPage />} />
+        <Route path="/isu" element={<Navigate to="/suara" replace />} />
         <Route path="/suara" element={<SuaraPage />} />
         <Route path="/solusi" element={<Navigate to="/" replace />} />
         <Route path="/alat" element={<Navigate to="/" replace />} />
