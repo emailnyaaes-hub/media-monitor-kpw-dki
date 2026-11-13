@@ -42,13 +42,6 @@ interface ReviewResult {
   saved?: boolean
 }
 
-const PENDEKATAN_HINT: Record<string, string> = {
-  siaran:
-    'Siaran pers: wajib gaya formal dengan «Yth.» (bukan «Hi»), tanpa slang/emoji. Hukum & data tetap ketat.',
-  caption:
-    'Caption: boleh «Hi» (mis. Hi Sobat BI); jangan «Yth.». Tetap bahasa baku—tanpa gak/ngga/utk/dgn.',
-}
-
 const RISKS = {
   Tinggi: 'border-red-300 bg-red-50',
   Sedang: 'border-amber-300 bg-amber-50',
@@ -69,12 +62,7 @@ const FILTER_TABS = ['semua', 'regulasi', 'implikasi_hukum', 'kata_baku', 'kejel
 type FilterTab = (typeof FILTER_TABS)[number]
 
 export default function ReviewPage() {
-  const [kind, setKind] = useState('siaran')
-  const [platform, setPlatform] = useState('Instagram')
   const [text, setText] = useState('')
-  const [topic, setTopic] = useState('')
-  const [audience, setAudience] = useState('')
-  const [releaseDate, setReleaseDate] = useState('')
   const [save, setSave] = useState(false)
   const [result, setResult] = useState<ReviewResult | null>(null)
   const [error, setError] = useState('')
@@ -103,7 +91,7 @@ export default function ReviewPage() {
     try {
       const data = await api<ReviewResult>('/api/review', {
         method: 'POST',
-        body: JSON.stringify({ kind, platform, text, topic, audience, release_date: releaseDate, save }),
+        body: JSON.stringify({ kind: 'siaran', text, save }),
       })
       setResult(data)
       if (data.error) setError(data.error)
@@ -162,30 +150,7 @@ export default function ReviewPage() {
         description="Periksa draf dari tiga sudut: kepatuhan UU, kata baku Indonesia, dan kejelasan kata. Saran ditampilkan ala track changes beserta alasan."
       />
       <Card className="mb-4">
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="text-sm">Jenis
-            <select className="mt-1 h-10 w-full rounded-lg border border-line bg-card px-2" value={kind} onChange={(event) => setKind(event.target.value)}>
-              <option value="siaran">Siaran Pers</option>
-              <option value="caption">Caption Sosmed</option>
-            </select>
-            <p className="mt-1 text-xs text-muted">{PENDEKATAN_HINT[kind] ?? PENDEKATAN_HINT.siaran}</p>
-          </label>
-          <label className="text-sm">Platform
-            <select className="mt-1 h-10 w-full rounded-lg border border-line bg-card px-2" value={platform} onChange={(event) => setPlatform(event.target.value)} disabled={kind !== 'caption'}>
-              {['Instagram', 'X', 'LinkedIn', 'Facebook', 'TikTok'].map((name) => <option key={name}>{name}</option>)}
-            </select>
-          </label>
-          <label className="text-sm">Topik
-            <input className="mt-1 h-10 w-full rounded-lg border border-line px-2" value={topic} onChange={(event) => setTopic(event.target.value)} />
-          </label>
-          <label className="text-sm">Target audiens
-            <input className="mt-1 h-10 w-full rounded-lg border border-line px-2" value={audience} onChange={(event) => setAudience(event.target.value)} />
-          </label>
-          <label className="text-sm">Tanggal rilis rencana
-            <input type="date" className="mt-1 h-10 w-full rounded-lg border border-line px-2" value={releaseDate} onChange={(event) => setReleaseDate(event.target.value)} />
-          </label>
-        </div>
-        <label className="mt-3 block text-sm">Draf
+        <label className="block text-sm">Draf
           <textarea className="mt-1 min-h-40 w-full rounded-lg border border-line p-3 text-sm" value={text} onChange={(event) => setText(event.target.value)} placeholder="Tempel draf di sini" />
         </label>
         <label className="mt-2 block text-sm">
