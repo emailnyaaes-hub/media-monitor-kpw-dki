@@ -6,6 +6,12 @@ import EvidenceList from './EvidenceList'
 
 interface Insight {
   title: string
+  who?: string
+  what?: string
+  when?: string
+  where?: string
+  why?: string
+  how?: string
   what_happened: string
   so_what: string
   now_what: string
@@ -14,6 +20,7 @@ interface Insight {
   evidence: Evidence[]
   method: string
   insight_version?: string
+  framework?: string
 }
 
 const CONFIDENCE_CLASS: Record<string, string> = {
@@ -24,10 +31,11 @@ const CONFIDENCE_CLASS: Record<string, string> = {
 
 const STAGES: [number, string][] = [
   [0, 'Mengambil data grafik…'],
-  [12, 'Membaca pola volume dan sentimen…'],
-  [35, 'Menyusun What happened (ragam BI)…'],
-  [58, 'Menyusun So what dan dampak persepsi…'],
-  [78, 'Menyusun Now what dan langkah implementasi…'],
+  [10, 'Menyusun Who / What / When…'],
+  [28, 'Menyusun Where dan How…'],
+  [48, 'Menyusun Why kritis dari judul & kategori…'],
+  [68, 'Menyusun So what (implikasi)…'],
+  [84, 'Menyusun Now what (tindak lanjut)…'],
 ]
 
 export default function ChartInsight({ chart, granularity = 'day', extraQuery = '', className = '' }: { chart: 'trend' | 'komposisi' | 'volume' | 'kata' | 'suara'; granularity?: string; extraQuery?: string; className?: string }) {
@@ -86,8 +94,14 @@ export default function ChartInsight({ chart, granularity = 'day', extraQuery = 
       {error && <p className="mt-2 border border-line p-2 text-sm">Insight belum tersedia. {error}</p>}
       {data && (
         <div className="mt-2 space-y-2 border border-line bg-canvas/60 p-3 text-sm">
-          <Section title="What happened">{data.what_happened}</Section>
-          <Section title="So what" badge="Hipotesis AI">{data.so_what}</Section>
+          <p className="text-xs font-bold uppercase tracking-wide text-muted">Kerangka 5W1H · berbasis data faktual</p>
+          <Section title="Who — Siapa?" badge="Aktor / media di data">{data.who || '—'}</Section>
+          <Section title="What — Apa?" badge="Fakta grafik">{data.what || data.what_happened}</Section>
+          <Section title="When — Kapan?" badge="Waktu">{data.when || '—'}</Section>
+          <Section title="Where — Di mana?" badge="Lokasi tercatat">{data.where || '—'}</Section>
+          <Section title="Why — Mengapa?" badge="Kritis · hanya dari judul/kategori/sumber">{data.why || '—'}</Section>
+          <Section title="How — Bagaimana?" badge="Bentuk pola">{data.how || '—'}</Section>
+          <Section title="So what" badge="Hipotesis AI · implikasi">{data.so_what}</Section>
           <Section title="Now what" badge="Prioritas tindak lanjut (disetujui pimpinan)">{data.now_what}</Section>
           <p className="text-xs">
             Keyakinan: <span className={`rounded-sm px-1.5 py-0.5 font-semibold ${CONFIDENCE_CLASS[data.keyakinan] || CONFIDENCE_CLASS.Rendah}`}>{data.keyakinan}</span>
@@ -98,7 +112,7 @@ export default function ChartInsight({ chart, granularity = 'day', extraQuery = 
           </div>
           <p className="text-xs text-muted">
             Metode: {data.method}
-            {data.insight_version ? ` · ${data.insight_version}` : ''}. Wajib diverifikasi manusia sebelum dipakai.
+            {data.insight_version ? ` · ${data.insight_version}` : ''}. Why tidak boleh mengada-ada; wajib diverifikasi manusia.
           </p>
         </div>
       )}
@@ -113,7 +127,7 @@ function Section({ title, badge, children }: { title: string; badge?: string; ch
         {title}
         {badge && <span className="rounded-sm border border-line px-1 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-muted">{badge}</span>}
       </p>
-      <p className="mt-0.5 whitespace-pre-wrap leading-relaxed">{children}</p>
+      <p className="mt-0.5 whitespace-pre-wrap text-justify leading-7">{children}</p>
     </div>
   )
 }
