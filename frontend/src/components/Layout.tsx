@@ -1,12 +1,13 @@
-import { Bell, LogOut, Menu, Moon, Search, Settings, Sun, X } from 'lucide-react'
+import { Bell, Compass, LayoutGrid, LogOut, Menu, MessageSquareText, Moon, Search, Settings, Sparkles, Sun, X } from 'lucide-react'
 import { FormEvent, useEffect, useRef, useState } from 'react'
-import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, useApi } from '../api'
 import { useAuth } from '../auth'
 import { useFilters } from '../filters'
 import { formatDay, PLATFORM_LABEL } from '../format'
 import { useTheme } from '../theme'
 import type { AlertItem } from '../types'
+import CommandPalette from './CommandPalette'
 import { BiLogo, Copyright, Logo, UNIT } from './Logo'
 import { inputClass } from './Ui'
 
@@ -16,6 +17,13 @@ const NAV = [
   { to: '/review', label: 'Review Konten' },
   { to: '/saran', label: 'Rekomendasi' },
   { to: '/explorer', label: 'Jelajah Berita' },
+]
+
+const MOBILE_NAV = [
+  { to: '/', label: 'Ringkasan', icon: LayoutGrid },
+  { to: '/suara', label: 'Suara', icon: MessageSquareText },
+  { to: '/saran', label: 'Saran', icon: Sparkles },
+  { to: '/explorer', label: 'Jelajah', icon: Compass },
 ]
 
 const CATEGORIES = [
@@ -35,8 +43,8 @@ const CATEGORIES = [
 const TOUR = [
   'Ringkasan dibaca seperti kanal berita. Mulai dari judul utama, lalu berita di bawahnya.',
   'Pilih rubrik di atas daftar, misalnya Berita Nasional atau KPw DKI, untuk mengganti kanal.',
-  'Klik judul untuk membuka berita asli di tab baru. Lihat semua membuka seluruh daftar.',
-  'Filter tanggal dan platform tetap di header. Chip aktif bisa dihapus.',
+  'Tekan ⌘K / Ctrl+K untuk perintah cepat: cari berita atau loncat menu.',
+  'Mode briefing membesarkan teks; mode analisis merapatkan layout data.',
 ]
 
 interface SavedView {
@@ -52,9 +60,12 @@ export default function Layout() {
   const filters = useFilters()
   const { theme, toggle } = useTheme()
   const navigate = useNavigate()
+  const location = useLocation()
   const [open, setOpen] = useState(false)
+  const [cmdOpen, setCmdOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [briefing, setBriefing] = useState(() => document.documentElement.classList.contains('briefing'))
+  const [analisis, setAnalisis] = useState(() => document.documentElement.classList.contains('analisis'))
   const [tourStep, setTourStep] = useState<number | null>(null)
   const [viewName, setViewName] = useState('')
   const [views, setViews] = useState<SavedView[]>(() => readViews())
@@ -92,10 +103,36 @@ export default function Layout() {
     if (!localStorage.getItem('bi-tour-done')) setTourStep(0)
   }, [])
 
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      const meta = event.metaKey || event.ctrlKey
+      if (meta && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        setCmdOpen((value) => !value)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   function toggleBriefing() {
     const next = !briefing
     setBriefing(next)
     document.documentElement.classList.toggle('briefing', next)
+    if (next) {
+      setAnalisis(false)
+      document.documentElement.classList.remove('analisis')
+    }
+  }
+
+  function toggleAnalisis() {
+    const next = !analisis
+    setAnalisis(next)
+    document.documentElement.classList.toggle('analisis', next)
+    if (next) {
+      setBriefing(false)
+      document.documentElement.classList.remove('briefing')
+    }
   }
 
   function search(event: FormEvent) {
@@ -210,8 +247,21 @@ export default function Layout() {
               </div>
             </details>
             <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                className="no-briefing hidden h-11 items-center gap-2 rounded-md border border-line px-3 text-sm text-muted hover:text-ink md:inline-flex"
+                onClick={() => setCmdOpen(true)}
+                aria-label="Perintah cepat"
+              >
+                <Search size={14} aria-hidden />
+                <span>Perintah</span>
+                <kbd className="rounded-sm border border-line px-1 text-[10px]">⌘K</kbd>
+              </button>
               <button className="h-11 rounded-md border border-line px-3 text-sm" onClick={toggleBriefing} aria-pressed={briefing}>
-                {briefing ? 'Keluar mode briefing' : 'Mode briefing'}
+                {briefing ? 'Keluar briefing' : 'Briefing'}
+              </button>
+              <button className="no-briefing h-11 rounded-md border border-line px-3 text-sm" onClick={toggleAnalisis} aria-pressed={analisis}>
+                {analisis ? 'Keluar analisis' : 'Analisis'}
               </button>
               <button className="no-briefing relative grid h-11 w-11 place-items-center rounded-md border border-line" aria-label="Notifikasi" onClick={() => navigate('/alert')}>
                 <Bell size={18} />
@@ -256,16 +306,34 @@ export default function Layout() {
           </div>
           <RefreshBar />
         </header>
-        <main className="px-4 py-5 md:px-6">
+        <main className="px-4 py-5 pb-24 md:px-6 md:pb-5">
           <Outlet />
         </main>
-        <footer className="border-t border-line px-4 py-4 text-sm leading-relaxed text-muted md:px-6">
+        <footer className="no-briefing hidden border-t border-line px-4 py-4 text-sm leading-relaxed text-muted md:block md:px-6">
           <p>Angka sentimen, skor risiko, dan saran bersifat pendukung. Putuskan setelah membaca sumber asli.</p>
           <Copyright className="mt-1 text-xs" />
         </footer>
       </div>
+      <nav className="bottom-nav no-briefing no-print" aria-label="Navigasi cepat">
+        {MOBILE_NAV.map((item) => {
+          const Icon = item.icon
+          const active = item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to)
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === '/'}
+              className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-bold uppercase tracking-wide ${active ? 'text-navy-900 dark:text-gold-300' : 'text-muted'}`}
+            >
+              <Icon size={18} aria-hidden />
+              {item.label}
+            </NavLink>
+          )
+        })}
+      </nav>
+      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
       {tourStep !== null && (
-        <div className="no-briefing fixed inset-x-0 bottom-0 z-50 border-t border-line bg-card p-4 shadow-none md:left-60" role="dialog" aria-labelledby="tour-title">
+        <div className="no-briefing fixed inset-x-0 bottom-14 z-50 border-t border-line bg-card p-4 shadow-none md:bottom-0 md:left-60" role="dialog" aria-labelledby="tour-title">
           <p id="tour-title" className="text-sm text-muted">Langkah {tourStep + 1} dari {TOUR.length}</p>
           <p className="mt-1 text-base">{TOUR[tourStep]}</p>
           <div className="mt-3 flex gap-2">

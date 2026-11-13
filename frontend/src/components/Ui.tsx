@@ -21,14 +21,28 @@ export function PageHeader({ title, description }: { title: string; description:
 }
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <section className={`rounded-md border border-line bg-card p-4 ${className}`}>{children}</section>
+  return <section className={`surface p-4 ${className}`}>{children}</section>
 }
 
 export function Loading() {
   return (
-    <div className="grid gap-3">
-      <div className="h-16 animate-pulse rounded-md bg-line/80" />
-      <div className="h-40 animate-pulse rounded-md bg-line/80" />
+    <div className="grid gap-3" role="status" aria-label="Memuat">
+      <div className="skeleton h-16" />
+      <div className="skeleton h-40" />
+    </div>
+  )
+}
+
+export function SkeletonFeed() {
+  return (
+    <div className="reveal space-y-4" role="status" aria-label="Memuat berita">
+      <div className="skeleton h-8 w-40" />
+      <div className="skeleton h-14 w-full max-w-3xl" />
+      <div className="skeleton h-24 w-full" />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="skeleton h-28" />
+        <div className="skeleton h-28" />
+      </div>
     </div>
   )
 }
@@ -37,8 +51,13 @@ export function ErrorNote({ message }: { message: string }) {
   return <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-base text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">{message}</div>
 }
 
-export function Empty({ label }: { label: string }) {
-  return <p className="py-8 text-center text-sm text-muted">{label}</p>
+export function Empty({ label, hint }: { label: string; hint?: string }) {
+  return (
+    <div className="surface px-4 py-10 text-center">
+      <p className="text-sm font-medium text-ink">{label}</p>
+      {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
+    </div>
+  )
 }
 
 export function StanceBadge({ stance }: { stance: Stance }) {

@@ -8,6 +8,9 @@
   --ink: #1a1d21;
   --muted: #5c6570;
   --line: #d9dee3;
+  --accent: #0b1f3a;
+  --signal: #b43333;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   color-scheme: light;
 }
 
@@ -17,6 +20,8 @@
   --ink: #f3f4f5;
   --muted: #c5cad0;
   --line: #3e444a;
+  --accent: #e1cb8e;
+  --signal: #e57373;
   color-scheme: dark;
 }
 
@@ -45,6 +50,17 @@ html.briefing .briefing-shift {
   padding-left: 0 !important;
 }
 
+/* Mode analisis: lebih rapat, fokus data */
+html.analisis main {
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+html.analisis .surface-section {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
 @media print {
   .no-print { display: none !important; }
   .screen-fit { height: auto !important; overflow: visible !important; }
@@ -56,8 +72,107 @@ html.briefing .briefing-shift {
   outline-offset: 2px;
 }
 
+@layer components {
+  .surface {
+    @apply border border-line bg-card;
+  }
+
+  .surface-section {
+    @apply border-b border-line py-6;
+  }
+
+  .kanal-tab {
+    @apply relative shrink-0 px-3 py-2.5 text-sm font-bold uppercase tracking-[0.12em] text-muted transition-colors;
+  }
+
+  .kanal-tab[aria-current='page'] {
+    @apply text-ink;
+  }
+
+  .kanal-tab[aria-current='page']::after {
+    content: '';
+    position: absolute;
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: -1px;
+    height: 2px;
+    background: var(--ink);
+    transform-origin: left center;
+    animation: kanal-underline 280ms var(--ease-out) both;
+  }
+
+  .reveal {
+    animation: reveal-up 420ms var(--ease-out) both;
+  }
+
+  .reveal-delay-1 { animation-delay: 60ms; }
+  .reveal-delay-2 { animation-delay: 120ms; }
+  .reveal-delay-3 { animation-delay: 180ms; }
+
+  .skeleton {
+    @apply relative overflow-hidden rounded-sm bg-line/70;
+  }
+
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+    animation: shimmer 1.4s infinite;
+  }
+
+  .dark .skeleton::after {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  }
+
+  .hero-title {
+    @apply text-3xl font-extrabold leading-[1.15] tracking-tight md:text-5xl;
+  }
+
+  .cmd-overlay {
+    @apply fixed inset-0 z-[60] flex items-start justify-center bg-navy-950/50 px-4 pt-[12vh] backdrop-blur-[2px];
+  }
+
+  .bottom-nav {
+    @apply fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-card/95 backdrop-blur-sm md:hidden;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+}
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes kanal-underline {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+
+@keyframes chart-in {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+
+.chart-enter {
+  animation: chart-in 500ms var(--ease-out) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  * {
+  *,
+  *::before,
+  *::after {
     animation: none !important;
     transition: none !important;
   }

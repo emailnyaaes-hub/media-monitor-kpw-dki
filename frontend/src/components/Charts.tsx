@@ -35,11 +35,27 @@ function useChrome() {
     tooltip: {
       background: theme === 'dark' ? '#121C2C' : '#ffffff',
       border: `1px solid ${theme === 'dark' ? '#2A3B52' : '#E3E8EF'}`,
-      borderRadius: 8,
+      borderRadius: 2,
       color: theme === 'dark' ? '#E7EEF6' : '#142033',
       fontSize: 12,
     },
   }
+}
+
+function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ payload: TrendPoint }>; label?: string }) {
+  if (!active || !payload?.length) return null
+  const point = payload[0]?.payload
+  if (!point) return null
+  return (
+    <div className="border border-line bg-card px-3 py-2 text-xs shadow-none">
+      <p className="font-bold">{formatDay(String(label))} · WIB</p>
+      <p className="mt-1 tabular-nums">Total {formatNumber(point.total)}{point.spike ? ' · lonjakan' : ''}</p>
+      <p className="mt-0.5 text-emerald-700 dark:text-emerald-300">Positif {formatNumber(point.positif)}</p>
+      <p className="text-slate-600 dark:text-slate-300">Netral {formatNumber(point.netral)}</p>
+      <p className="text-red-700 dark:text-red-300">Negatif {formatNumber(point.negatif)}</p>
+      <p className="mt-1 text-[10px] text-muted">Klik hari untuk menyaring berita</p>
+    </div>
+  )
 }
 
 export function TrendChart({ data, onPick, className = 'h-72' }: { data: TrendPoint[]; onPick: (day: string) => void; className?: string }) {
@@ -57,19 +73,11 @@ export function TrendChart({ data, onPick, className = 'h-72' }: { data: TrendPo
           <CartesianGrid stroke={chrome.grid} vertical={false} />
           <XAxis dataKey="date" tickFormatter={formatDay} tick={{ fill: chrome.text, fontSize: 11 }} axisLine={false} tickLine={false} />
           <YAxis tick={{ fill: chrome.text, fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-          <Tooltip
-            contentStyle={chrome.tooltip}
-            labelFormatter={(label) => formatDay(String(label))}
-            formatter={(value, name, item) => {
-              const spike = (item?.payload as TrendPoint | undefined)?.spike
-              const text = name === 'total' && spike ? `${value} (lonjakan)` : value
-              return [text as string | number, name as string]
-            }}
-          />
+          <Tooltip content={<TrendTooltip />} />
           <Legend />
-          <Area type="monotone" dataKey="positif" name="Positif" stackId="1" stroke={POS} fill={POS} fillOpacity={0.8} />
-          <Area type="monotone" dataKey="netral" name="Netral" stackId="1" stroke={NET} fill={NET} fillOpacity={0.75} />
-          <Area type="monotone" dataKey="negatif" name="Negatif" stackId="1" stroke={NEG} fill={NEG} fillOpacity={0.8} />
+          <Area type="monotone" dataKey="positif" name="Positif" stackId="1" stroke={POS} fill={POS} fillOpacity={0.8} isAnimationActive animationDuration={700} />
+          <Area type="monotone" dataKey="netral" name="Netral" stackId="1" stroke={NET} fill={NET} fillOpacity={0.75} isAnimationActive animationDuration={700} />
+          <Area type="monotone" dataKey="negatif" name="Negatif" stackId="1" stroke={NEG} fill={NEG} fillOpacity={0.8} isAnimationActive animationDuration={700} />
         </AreaChart>
       </ResponsiveContainer>
     </div>
