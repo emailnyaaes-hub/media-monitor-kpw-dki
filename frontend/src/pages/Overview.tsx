@@ -1,18 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApi } from '../api'
-import type { AdviceItem } from '../components/AdviceCard'
-import { priorityOf } from '../components/AdviceCard'
 import { TrendChart } from '../components/Charts'
 import BackToGeneral from '../components/BackToGeneral'
 import ChartInsight from '../components/ChartInsight'
 import MentionBrief from '../components/MentionBrief'
-import RecommendationDrawer from '../components/RecommendationDrawer'
 import { Empty, ErrorNote, Loading, QuoteBadge, StanceBadge } from '../components/Ui'
 import { useFilters } from '../filters'
 import { formatNumber, formatPct, isoDate, PLATFORM_LABEL, relativeTime } from '../format'
 import type { MentionCard, Overview, TrendPoint } from '../types'
-import ExecutivePage from './Executive'
 
 const RUBRIK = [
   { id: 'bi_nasional', label: 'Berita Nasional', hint: 'Bank Indonesia, moneter, rupiah, inflasi, keuangan daerah, QRIS, dan mandat BI.' },
@@ -26,7 +22,6 @@ export default function OverviewPage() {
   const navigate = useNavigate()
   const [rubrik, setRubrik] = useState<(typeof RUBRIK)[number]['id']>('bi_nasional')
   const [grain, setGrain] = useState<'day' | 'week' | 'month'>('day')
-  const [picked, setPicked] = useState<AdviceItem | null>(null)
   // Rubrik tematik: tampilkan arsip hingga 1 tahun agar section tidak kosong.
   const mentionQuery = (() => {
     const params = new URLSearchParams(filters.query)
@@ -40,9 +35,7 @@ export default function OverviewPage() {
   })()
   const overview = useApi<Overview>(`/api/overview?${filters.query}`)
   const latest = useApi<{ items: MentionCard[] }>(`/api/mentions?page_size=16&sort=terbaru&${mentionQuery}`)
-  const popular = useApi<{ items: MentionCard[] }>(`/api/mentions?page_size=6&sort=jangkauan&${mentionQuery}`)
   const extra = useApi<{ items: TrendPoint[] }>(grain === 'day' ? null : `/api/trend?granularity=${grain}&${filters.query}`)
-  const advice = useApi<{ disclaimer: string; items: AdviceItem[] }>('/api/advices?top=3')
 
   const data = overview.data
   const stories = latest.data?.items || []
@@ -94,25 +87,11 @@ export default function OverviewPage() {
       )}
 
       {lead && (
-        <div className="grid gap-6 border-b border-ink pb-6 lg:grid-cols-[minmax(0,1fr)_17rem]">
-          <div>
-            <Story item={lead} lead />
-            <div className="mt-4 grid gap-4 border-t border-line pt-4 sm:grid-cols-2">
-              {side.map((item) => <Story key={item.id} item={item} />)}
-            </div>
+        <div className="border-b border-ink pb-6">
+          <Story item={lead} lead />
+          <div className="mt-4 grid gap-4 border-t border-line pt-4 sm:grid-cols-2">
+            {side.map((item) => <Story key={item.id} item={item} />)}
           </div>
-          <aside aria-label="Terpopuler">
-            <SectionHead title="Terpopuler" />
-            <ol className="divide-y divide-line">
-              {(popular.data?.items || []).map((item, index) => (
-                <li key={item.id} className="flex gap-3 py-3">
-                  <span className="w-8 shrink-0 text-2xl font-bold leading-none tabular-nums text-red-700">{String(index + 1).padStart(2, '0')}</span>
-                  <Story item={item} compact />
-                </li>
-              ))}
-            </ol>
-            {popular.data && popular.data.items.length === 0 && <p className="text-sm text-muted">Belum ada berita dengan jangkauan pada rentang ini.</p>}
-          </aside>
         </div>
       )}
 
@@ -145,7 +124,7 @@ export default function OverviewPage() {
       )}
 
       {stories.length > 0 && (
-        <section className="border-b border-ink py-6" aria-label="Terbaru">
+        <section className="py-6" aria-label="Terbaru">
           <SectionHead title="Terbaru" actionLabel="Lihat lebih banyak" onAction={openAll} />
           <ul className="divide-y divide-line">
             {stories.map((item) => (
@@ -157,28 +136,6 @@ export default function OverviewPage() {
           </ul>
         </section>
       )}
-
-      <section className="border-b border-ink py-6" aria-label="Untuk pimpinan">
-        <SectionHead title="Untuk pimpinan" actionLabel="Lihat semua" onAction={() => navigate('/saran')} />
-        {(advice.data?.items || []).length === 0 && <p className="text-sm text-muted">Belum ada rekomendasi dengan bukti pada siklus ini.</p>}
-        <ul className="grid gap-4 md:grid-cols-3">
-          {(advice.data?.items || []).map((item) => (
-            <li key={item.id}>
-              <button className="block w-full text-left" onClick={() => setPicked(item)}>
-                <span className={`text-xs font-bold uppercase ${priorityOf(item.urgency).className}`}>{priorityOf(item.urgency).label}</span>
-                <span className="mt-1 block text-lg font-bold leading-snug hover:underline">{item.title}</span>
-                <span className="mt-1 block text-sm text-muted">{item.unit}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="py-6" aria-label="Fokus isu">
-        <ExecutivePage />
-      </section>
-
-      {picked && <RecommendationDrawer item={picked} disclaimer={advice.data?.disclaimer || ''} onClose={() => setPicked(null)} onChanged={advice.reload} />}
     </div>
   )
 }
