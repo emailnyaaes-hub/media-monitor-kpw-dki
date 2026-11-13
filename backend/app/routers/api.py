@@ -156,10 +156,12 @@ def health(db: Session = Depends(get_db)):
     seeded = db.get(AppMeta, "seeded_at")
     import os
 
+    last_ingest = db.get(AppMeta, "last_ingest_at")
     return {
         "status": "ok",
         "mode": mode.value if mode else "unknown",
         "seeded_at": seeded.value if seeded else None,
+        "last_ingest_at": last_ingest.value if last_ingest else None,
         "mentions": external_only(db.query(Mention), load_rules(db)).count(),
         "build": os.environ.get("VERCEL_GIT_COMMIT_SHA", "")[:12] or "local",
         "features": ["feed_section_v1", "mention_brief", "pemprov_official_v3b"],
@@ -1048,7 +1050,7 @@ def job_ingest(
     mode: str = Query(default="cepat", pattern="^(cepat|penuh)$"),
     wait: bool = Query(default=False),
     db: Session = Depends(get_db),
-    _: CurrentUser = Depends(require_admin),
+    _: CurrentUser = Depends(require_writer),
 ):
     """mode=cepat: RSS langsung. Di Vercel wajib sinkron agar proses tidak terbunuh."""
     on_vercel = os.environ.get("VERCEL") == "1" or os.environ.get("VERCEL_ENV")
