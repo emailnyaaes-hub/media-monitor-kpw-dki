@@ -1,7 +1,7 @@
 FROM node:20-bookworm-slim AS web
 WORKDIR /src/frontend
 # Bust cache frontend: ubah nilai ini tiap rilis UI penting.
-ARG FRONTEND_CACHEBUST=ringkasan-slim-20261113
+ARG FRONTEND_CACHEBUST=brief-justify-20261113
 RUN echo "frontend_cachebust=$FRONTEND_CACHEBUST"
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci

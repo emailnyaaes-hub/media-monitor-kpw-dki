@@ -10,7 +10,8 @@ export default function MentionBrief({
   if (!text?.trim()) return null
   return (
     <p
-      className={`mt-1.5 text-sm leading-relaxed text-foreground/90 ${compact ? 'line-clamp-3' : ''} ${className}`}
+      className={`mt-1.5 text-justify text-sm leading-7 tracking-normal text-foreground/90 [text-wrap:pretty] hyphens-auto ${compact ? 'line-clamp-4' : ''} ${className}`}
+      lang="id"
     >
       {text}
     </p>
