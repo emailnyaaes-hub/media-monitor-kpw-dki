@@ -136,7 +136,8 @@ html.analisis .surface-section {
   }
 
   .bottom-nav {
-    @apply fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-card/95 backdrop-blur-sm md:hidden;
+    @apply fixed inset-x-0 bottom-0 z-30 flex border-t border-line backdrop-blur-sm md:hidden;
+    background: color-mix(in srgb, var(--card) 95%, transparent);
     padding-bottom: env(safe-area-inset-bottom, 0);
   }
 }
