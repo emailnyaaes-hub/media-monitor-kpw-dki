@@ -323,12 +323,13 @@ function RefreshBar() {
   const { user } = useAuth()
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null)
+  const autoTried = useRef(false)
   const canRefresh = user?.role === 'admin' || user?.role === 'analis'
-  if (!canRefresh) return null
 
-  async function refresh() {
+  async function runIngest(reason: 'manual' | 'auto') {
     setBusy(true)
-    setNote('Mengambil sumber… bisa 30–60 detik.')
+    setNote(reason === 'auto' ? 'Data lebih dari 2 jam — memperbarui otomatis…' : 'Mengambil sumber… bisa 30–60 detik.')
     try {
       // Jangan retag dulu — retag seluruh arsip sering timeout di Vercel sebelum ingest jalan.
       const result = await api<{ status: string; added?: number; skipped?: number; message?: string }>(
@@ -353,14 +354,44 @@ function RefreshBar() {
     }
   }
 
+  useEffect(() => {
+    if (!canRefresh || autoTried.current) return
+    autoTried.current = true
+    let cancel = false
+    ;(async () => {
+      try {
+        const status = await api<{ needs_refresh?: boolean; last_updated?: string | null; running?: boolean }>(
+          '/api/ingest/status',
+        )
+        if (cancel) return
+        setLastUpdated(status.last_updated || null)
+        if (status.needs_refresh && !status.running) {
+          await runIngest('auto')
+        }
+      } catch {
+        /* status opsional */
+      }
+    })()
+    return () => {
+      cancel = true
+    }
+  }, [canRefresh])
+
+  if (!canRefresh) return null
+
   return (
     <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line px-4 py-2 md:px-6">
+      {lastUpdated ? (
+        <p className="text-xs text-muted" title="Waktu pembaruan data terakhir (WIB)">
+          Data: {lastUpdated.replace('T', ' ')} WIB
+        </p>
+      ) : null}
       {note ? <p className="max-w-md text-right text-sm text-muted" role="status">{note}</p> : null}
       <button
         type="button"
         className="no-briefing h-9 rounded-md bg-navy-900 px-4 text-sm text-white disabled:opacity-60"
         disabled={busy}
-        onClick={() => void refresh()}
+        onClick={() => void runIngest('manual')}
       >
         {busy ? 'Memperbarui…' : 'Perbarui'}
       </button>
