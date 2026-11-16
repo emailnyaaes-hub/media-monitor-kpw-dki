@@ -96,6 +96,14 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
     started = now_wib()
     _set_running(db, True)
     try:
+        import os
+        import time
+
+        on_vercel = bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"))
+        # Di Vercel request sering dipotong; stempel dulu supaya UI tidak terlihat basi.
+        db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
+        db.commit()
+
         since = _since(db)
         keywords = db.query(Keyword).all()
         queries = db.query(SavedQuery).all()
@@ -103,10 +111,11 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
 
         rules = load_rules(db)
         db.commit()
-        log.info("Pengambilan %s mulai. Jendela sejak %s", mode, since.isoformat(timespec="minutes"))
+        log.info("Pengambilan %s mulai. Jendela sejak %s vercel=%s", mode, since.isoformat(timespec="minutes"), on_vercel)
         added = skipped = rejected = invalid = 0
         summaries = []
         any_ok = False
+        hard_deadline = time.monotonic() + (45 if on_vercel else 120)
 
         def _consume(report) -> None:
             nonlocal added, skipped, rejected, invalid, any_ok
@@ -133,8 +142,8 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
 
         # Tematik dulu dan langsung disimpan — bila Vercel timeout, rubrik tetap terisi.
         if mode == "cepat":
-            import time
             from concurrent.futures import ThreadPoolExecutor, as_completed
+            from concurrent.futures import TimeoutError as FuturesTimeout
 
             from app.connectors.live import (
                 fetch_google_kpw_dki,
@@ -145,13 +154,12 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
 
             # Portal/Google Pemprov dulu — hard cap agar tidak menggantung.
             try:
-                _consume(fetch_pemprov_portal(deadline=time.monotonic() + 12))
+                _consume(fetch_pemprov_portal(deadline=min(hard_deadline, time.monotonic() + (8 if on_vercel else 12))))
             except Exception as exc:
                 log.exception("Portal Pemprov gagal: %s", exc)
 
-            from concurrent.futures import TimeoutError as FuturesTimeout
-
-            theme_deadline = time.monotonic() + 16
+            theme_budget = 12 if on_vercel else 16
+            theme_deadline = min(hard_deadline, time.monotonic() + theme_budget)
             pool = ThreadPoolExecutor(max_workers=3)
             try:
                 futures = [
@@ -159,33 +167,35 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
                     pool.submit(fetch_google_kpw_dki, theme_deadline),
                     pool.submit(fetch_google_kpw_provinsi, theme_deadline),
                 ]
-                for future in as_completed(futures, timeout=16):
+                for future in as_completed(futures, timeout=theme_budget):
+                    if time.monotonic() > hard_deadline:
+                        break
                     try:
                         _consume(future.result(timeout=0.2))
                     except Exception as exc:
                         log.exception("Arsip tematik gagal: %s", exc)
             except (TimeoutError, FuturesTimeout):
-                log.warning("Batas waktu arsip tematik Google habis; lanjut RSS.")
+                log.warning("Batas waktu arsip tematik Google habis; lanjut.")
             finally:
                 pool.shutdown(wait=False, cancel_futures=True)
-            # Stempel lebih awal agar timeout Vercel tidak meninggalkan last_ingest basi.
             db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
             db.commit()
-            # Mode cepat: skip RSS berat bila sudah dapat Pemprov, hemat waktu Vercel.
+            # Di Vercel jangan tarik RSS berat — sering menggantung sampai gateway timeout.
             reports = []
-            if added < 3:
+            if (not on_vercel) and added < 3 and time.monotonic() < hard_deadline - 5:
                 reports = collect_reports(since, rules, mode=mode, include_thematic=False)
         else:
-            import time as _time
-
             from app.connectors.live import fetch_pemprov_portal
 
             try:
-                _consume(fetch_pemprov_portal(deadline=_time.monotonic() + 20))
+                _consume(fetch_pemprov_portal(deadline=time.monotonic() + 20))
             except Exception as exc:
                 log.exception("Portal Pemprov gagal: %s", exc)
             reports = collect_reports(since, rules, mode=mode, include_thematic=True)
         for report in reports:
+            if time.monotonic() > hard_deadline:
+                log.warning("Hard deadline ingest tercapai; hentikan sisa konektor.")
+                break
             _consume(report)
         # Mode cepat: simpan mention saja. Susunan isu/saran ditunda agar UI tidak timeout.
         created = 0
@@ -197,7 +207,8 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
             from app.services.dss import refresh_advices
 
             advice = refresh_advices(db)
-        elif mode == "cepat" and added:
+        elif mode == "cepat" and added and (not on_vercel):
+            # rebuild_issues berat di Vercel; tunda agar respons ingest tidak hang.
             created = rebuild_issues(db)
         db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
         if any_ok or added:
