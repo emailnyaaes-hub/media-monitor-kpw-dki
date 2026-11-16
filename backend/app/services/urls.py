@@ -73,6 +73,8 @@ _TRUSTED_OFFICIAL_HOSTS = (
 
 
 def is_public_article(url: str) -> bool:
+    import os
+
     lowered = url.lower()
     if "news.google.com" in lowered or "contoh.media-monitor.local" in lowered:
         return False
@@ -83,6 +85,10 @@ def is_public_article(url: str) -> bool:
     host = urlsplit(url).netloc.lower()
     if host in {"jakarta.go.id", "www.jakarta.go.id"}:
         return True
+    # Di Vercel, probe HTTP per-URL sering hang (egress lambat) dan memblokir seluruh ingest.
+    # Percayai URL penerbit hasil decode Google/RSS selama skema http(s) valid.
+    if os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"):
+        return bool(host) and urlsplit(url).scheme in {"http", "https"}
     try:
         status = http_status(url)
     except Exception:

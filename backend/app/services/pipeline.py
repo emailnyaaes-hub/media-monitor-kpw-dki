@@ -150,19 +150,32 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
             )
 
             if on_vercel:
-                # Jalur sempit berurutan: tanpa thread pool (sering hang di serverless).
+                # Paksa lepas tiap konektor: urlopen/Google kadang mengabaikan timeout di edge.
+                from concurrent.futures import ThreadPoolExecutor
+                from concurrent.futures import TimeoutError as FuturesTimeout
+
                 for label, runner, budget in (
-                    ("pemprov", lambda d: fetch_pemprov_portal(deadline=d), 7),
-                    ("kpw_dki", lambda d: fetch_google_kpw_dki(d), 6),
-                    ("kpw_prov", lambda d: fetch_google_kpw_provinsi(d), 6),
-                    ("pemprov_g", lambda d: fetch_google_pemprov_dki(d), 6),
+                    ("pemprov", lambda d: fetch_pemprov_portal(deadline=d), 8),
+                    ("kpw_dki", lambda d: fetch_google_kpw_dki(d), 8),
+                    ("kpw_prov", lambda d: fetch_google_kpw_provinsi(d), 8),
+                    ("pemprov_g", lambda d: fetch_google_pemprov_dki(d), 8),
                 ):
-                    if time.monotonic() > hard_deadline - 2:
+                    if time.monotonic() > hard_deadline - 1:
                         break
+                    pool = ThreadPoolExecutor(max_workers=1)
                     try:
-                        _consume(runner(min(hard_deadline, time.monotonic() + budget)))
+                        fut = pool.submit(runner, min(hard_deadline, time.monotonic() + budget))
+                        report = fut.result(timeout=budget + 1)
+                        _consume(report)
+                    except FuturesTimeout:
+                        log.warning("Konektor %s dipotong (timeout %ss)", label, budget)
+                        summaries.append(
+                            {"name": label, "status": "gagal", "found": 0, "added": 0, "message": "Timeout konektor"}
+                        )
                     except Exception as exc:
                         log.exception("Konektor %s gagal: %s", label, exc)
+                    finally:
+                        pool.shutdown(wait=False, cancel_futures=True)
                     db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
                     db.commit()
                 reports = []
