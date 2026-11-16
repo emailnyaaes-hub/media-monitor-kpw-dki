@@ -59,44 +59,48 @@ def ingest_lite(db: Session) -> dict:
         db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
         db.commit()
 
-        # Ambil sumber di proses terpisah dengan hard wall-clock (signal) —
-        # ThreadPoolExecutor.result(timeout) di Vercel sering tidak memotong socket hang.
-        import signal
+        # Proses anak bisa di-kill; thread timeout di Vercel sering tidak memotong socket hang.
+        import multiprocessing as mp
 
         keywords = db.query(Keyword).all()
         queries = db.query(SavedQuery).all()
         rules = load_rules(db)
         db.commit()
 
-        class _TimeUp(Exception):
-            pass
-
-        def _alarm(_signum, _frame):
-            raise _TimeUp()
+        def _child_fetch(queue: mp.Queue) -> None:
+            try:
+                end = time.monotonic() + 14
+                batch = []
+                try:
+                    batch.append(fetch_pemprov_portal(deadline=min(end, time.monotonic() + 7)))
+                except Exception as exc:
+                    log.warning("lite pemprov: %s", exc)
+                if time.monotonic() < end:
+                    try:
+                        batch.append(fetch_google_kpw_dki(min(end, time.monotonic() + 7)))
+                    except Exception as exc:
+                        log.warning("lite kpw_dki: %s", exc)
+                queue.put(batch)
+            except Exception as exc:
+                queue.put(exc)
 
         fetched: list = []
-        old_handler = signal.signal(signal.SIGALRM, _alarm)
-        signal.alarm(18)
-        try:
-            end = time.monotonic() + 16
-            try:
-                fetched.append(fetch_pemprov_portal(deadline=min(end, time.monotonic() + 7)))
-            except _TimeUp:
-                raise
-            except Exception as exc:
-                log.warning("lite pemprov: %s", exc)
-            if time.monotonic() < end:
-                try:
-                    fetched.append(fetch_google_kpw_dki(min(end, time.monotonic() + 7)))
-                except _TimeUp:
-                    raise
-                except Exception as exc:
-                    log.warning("lite kpw_dki: %s", exc)
-        except _TimeUp:
-            summaries.append({"name": "fetch", "status": "gagal", "found": 0, "added": 0, "message": "SIGALRM 18s"})
-        finally:
-            signal.alarm(0)
-            signal.signal(signal.SIGALRM, old_handler)
+        queue: mp.Queue = mp.Queue()
+        proc = mp.Process(target=_child_fetch, args=(queue,), daemon=True)
+        proc.start()
+        proc.join(timeout=16)
+        if proc.is_alive():
+            proc.terminate()
+            proc.join(timeout=2)
+            summaries.append({"name": "fetch", "status": "gagal", "found": 0, "added": 0, "message": "Proses fetch dipotong 16s"})
+        elif not queue.empty():
+            payload = queue.get()
+            if isinstance(payload, Exception):
+                log.exception("lite fetch gagal: %s", payload)
+            else:
+                fetched = list(payload or [])
+        else:
+            summaries.append({"name": "fetch", "status": "gagal", "found": 0, "added": 0, "message": "Fetch tanpa hasil"})
 
         for report in fetched:
             report.items = list(report.items or [])[:6]

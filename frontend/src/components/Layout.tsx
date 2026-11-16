@@ -348,7 +348,14 @@ function RefreshBar() {
       setNote(added > 0 ? `Selesai: ${added} berita baru. Memuat ulang…` : 'Selesai: belum ada berita baru dari sumber. Memuat ulang…')
       window.setTimeout(() => window.location.reload(), 900)
     } catch (err) {
-      setNote(err instanceof Error ? err.message : 'Pengambilan gagal.')
+      const message = err instanceof Error ? err.message : 'Pengambilan gagal.'
+      // Vercel sering 504 meski sumber sudah sempat tersimpan — muat ulang setelah jeda.
+      if (/504|502|waktu|timeout|kehabisan waktu/i.test(message)) {
+        setNote('Server masih mengambil sumber (batas waktu Vercel). Memuat ulang sebentar…')
+        window.setTimeout(() => window.location.reload(), 8000)
+        return
+      }
+      setNote(message)
     } finally {
       setBusy(false)
     }
