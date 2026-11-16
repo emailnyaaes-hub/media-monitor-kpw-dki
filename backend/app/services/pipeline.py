@@ -33,6 +33,91 @@ CITIES = [
 ]
 
 
+def ingest_lite(db: Session) -> dict:
+    """Jalur produksi paling pendek: stempel + 1–2 sumber, wajib kembali <~25 detik."""
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import TimeoutError as FuturesTimeout
+
+    from app.connectors.live import fetch_google_kpw_dki, fetch_pemprov_portal
+    from app.services.blocklist import load_rules
+
+    if not ingest_lock.acquire(blocking=False):
+        return {"status": "sedang_berjalan", "mode": "cepat", "added": 0, "skipped": 0, "rejected": 0, "invalid_url": 0, "alerts": 0}
+    started = now_wib()
+    _set_running(db, True)
+    added = skipped = rejected = invalid = 0
+    summaries: list[dict] = []
+    try:
+        db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
+        db.commit()
+        keywords = db.query(Keyword).all()
+        queries = db.query(SavedQuery).all()
+        rules = load_rules(db)
+        db.commit()
+
+        def _fetch() -> list:
+            out = []
+            end = time.monotonic() + 12
+            try:
+                out.append(fetch_pemprov_portal(deadline=min(end, time.monotonic() + 6)))
+            except Exception as exc:
+                log.warning("lite pemprov: %s", exc)
+            if time.monotonic() < end:
+                try:
+                    out.append(fetch_google_kpw_dki(min(end, time.monotonic() + 6)))
+                except Exception as exc:
+                    log.warning("lite kpw_dki: %s", exc)
+            return out
+
+        fetched: list = []
+        pool = ThreadPoolExecutor(max_workers=1)
+        try:
+            fetched = pool.submit(_fetch).result(timeout=14)
+        except FuturesTimeout:
+            summaries.append({"name": "fetch", "status": "gagal", "found": 0, "added": 0, "message": "Timeout fetch lite 14s"})
+        except Exception as exc:
+            log.exception("lite fetch gagal: %s", exc)
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
+
+        for report in fetched:
+            # Batasi item supaya simpan cepat.
+            report.items = list(report.items or [])[:8]
+            result = _store_report(db, report, keywords, queries, rules, started)
+            added += result["added"]
+            skipped += result["skipped"]
+            rejected += result["rejected"]
+            invalid += result["invalid_url"]
+            summaries.append(result["summary"])
+
+        db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
+        if added:
+            db.merge(AppMeta(key="data_mode", value="live"))
+        db.commit()
+        return {
+            "status": "selesai",
+            "mode": "cepat",
+            "path": "lite",
+            "added": added,
+            "skipped": skipped,
+            "rejected": rejected,
+            "invalid_url": invalid,
+            "alerts": 0,
+            "issues": 0,
+            "connectors": summaries,
+        }
+    except Exception as exc:
+        log.exception("ingest_lite gagal")
+        return {"status": "gagal", "mode": "cepat", "path": "lite", "added": 0, "error": f"{exc.__class__.__name__}: {exc}"}
+    finally:
+        try:
+            _set_running(db, False)
+        except Exception:
+            log.exception("Gagal mengosongkan penanda pengambilan")
+        ingest_lock.release()
+
+
 def start_ingest(mode: str = "cepat") -> dict:
     """Mulai pengambilan di thread terpisah agar request HTTP tidak digantung Vercel."""
     if mode not in {"cepat", "penuh"}:

@@ -1060,9 +1060,13 @@ def job_ingest(
     if force or wait:
         if ingest_running(db):
             _set_running(db, False)
-    on_vercel = os.environ.get("VERCEL") == "1" or os.environ.get("VERCEL_ENV")
-    if wait or on_vercel:
-        return ingest(db, mode=mode)
+    from app.services.pipeline import ingest_lite, start_ingest
+
+    # Produksi: jalur lite agar tidak hang (Vercel container / egress lambat).
+    if wait or os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV") or os.environ.get("BI_FAST_INGEST") == "1":
+        if mode == "penuh":
+            return ingest(db, mode="penuh")
+        return ingest_lite(db)
     return start_ingest(mode)
 
 
@@ -1078,12 +1082,11 @@ def cron_ingest(request: Request, db: Session = Depends(get_db)):
         pass
     else:
         raise HTTPException(status_code=401, detail="Cron tidak diizinkan")
-    # Di Vercel container mati setelah respons; jalankan sinkron (mode cepat, batas ~35 detik).
-    on_vercel = os.environ.get("VERCEL") == "1" or os.environ.get("VERCEL_ENV")
-    if on_vercel:
-        return ingest(db, mode="cepat")
-    return start_ingest("cepat")
+    from app.services.pipeline import _set_running, ingest_lite, ingest_running
 
+    if ingest_running(db):
+        _set_running(db, False)
+    return ingest_lite(db)
 
 @router.post("/jobs/retag")
 def job_retag(db: Session = Depends(get_db), _: CurrentUser = Depends(require_writer)):
