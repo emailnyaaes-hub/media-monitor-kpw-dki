@@ -36,8 +36,6 @@ CITIES = [
 def ingest_lite(db: Session) -> dict:
     """Jalur produksi paling pendek: stempel + 1–2 sumber, wajib kembali <~25 detik."""
     import time
-    from concurrent.futures import ThreadPoolExecutor
-    from concurrent.futures import TimeoutError as FuturesTimeout
 
     from sqlalchemy import text
 
@@ -61,51 +59,44 @@ def ingest_lite(db: Session) -> dict:
         db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
         db.commit()
 
-        try:
-            keywords = db.query(Keyword).all()
-            queries = db.query(SavedQuery).all()
-            rules = load_rules(db)
-            db.commit()
-        except Exception as exc:
-            log.exception("lite meta query gagal: %s", exc)
-            db.rollback()
-            return {
-                "status": "selesai",
-                "mode": "cepat",
-                "path": "lite-stamp",
-                "added": 0,
-                "skipped": 0,
-                "rejected": 0,
-                "invalid_url": 0,
-                "alerts": 0,
-                "message": f"Stempel diperbarui; baca kamus gagal: {exc.__class__.__name__}",
-                "connectors": [],
-            }
+        # Ambil sumber di proses terpisah dengan hard wall-clock (signal) —
+        # ThreadPoolExecutor.result(timeout) di Vercel sering tidak memotong socket hang.
+        import signal
 
-        def _fetch() -> list:
-            out = []
-            end = time.monotonic() + 10
+        keywords = db.query(Keyword).all()
+        queries = db.query(SavedQuery).all()
+        rules = load_rules(db)
+        db.commit()
+
+        class _TimeUp(Exception):
+            pass
+
+        def _alarm(_signum, _frame):
+            raise _TimeUp()
+
+        fetched: list = []
+        old_handler = signal.signal(signal.SIGALRM, _alarm)
+        signal.alarm(18)
+        try:
+            end = time.monotonic() + 16
             try:
-                out.append(fetch_pemprov_portal(deadline=min(end, time.monotonic() + 5)))
+                fetched.append(fetch_pemprov_portal(deadline=min(end, time.monotonic() + 7)))
+            except _TimeUp:
+                raise
             except Exception as exc:
                 log.warning("lite pemprov: %s", exc)
             if time.monotonic() < end:
                 try:
-                    out.append(fetch_google_kpw_dki(min(end, time.monotonic() + 5)))
+                    fetched.append(fetch_google_kpw_dki(min(end, time.monotonic() + 7)))
+                except _TimeUp:
+                    raise
                 except Exception as exc:
                     log.warning("lite kpw_dki: %s", exc)
-            return out
-
-        fetched: list = []
-        pool = ThreadPoolExecutor(max_workers=1)
-        try:
-            fetched = pool.submit(_fetch).result(timeout=12)
-        except FuturesTimeout:
-            summaries.append({"name": "fetch", "status": "gagal", "found": 0, "added": 0, "message": "Timeout fetch lite 12s"})
-        except Exception as exc:
-            log.exception("lite fetch gagal: %s", exc)
+        except _TimeUp:
+            summaries.append({"name": "fetch", "status": "gagal", "found": 0, "added": 0, "message": "SIGALRM 18s"})
         finally:
-            pool.shutdown(wait=False, cancel_futures=True)
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)
 
         for report in fetched:
             report.items = list(report.items or [])[:6]
@@ -114,7 +105,7 @@ def ingest_lite(db: Session) -> dict:
             except Exception as exc:
                 log.exception("lite store gagal: %s", exc)
                 db.rollback()
-                summaries.append({"name": report.name, "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
+                summaries.append({"name": getattr(report, "name", "?"), "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
                 continue
             added += result["added"]
             skipped += result["skipped"]
@@ -129,7 +120,7 @@ def ingest_lite(db: Session) -> dict:
         return {
             "status": "selesai",
             "mode": "cepat",
-            "path": "lite",
+            "path": "lite-alarm",
             "added": added,
             "skipped": skipped,
             "rejected": rejected,
