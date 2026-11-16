@@ -1063,10 +1063,18 @@ def job_ingest(
     from app.services.pipeline import ingest_lite, start_ingest
 
     # Produksi: jalur lite agar tidak hang (Vercel container / egress lambat).
+    from fastapi.responses import JSONResponse
+
     if wait or os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV") or os.environ.get("BI_FAST_INGEST") == "1":
         if mode == "penuh":
-            return ingest(db, mode="penuh")
-        return ingest_lite(db)
+            payload = ingest(db, mode="penuh")
+        else:
+            payload = ingest_lite(db)
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+        return JSONResponse(content=payload, headers={"Connection": "close", "Cache-Control": "no-store"})
     return start_ingest(mode)
 
 
