@@ -39,7 +39,10 @@ def ingest_lite(db: Session) -> dict:
     from concurrent.futures import ThreadPoolExecutor
     from concurrent.futures import TimeoutError as FuturesTimeout
 
+    from sqlalchemy import text
+
     from app.connectors.live import fetch_google_kpw_dki, fetch_pemprov_portal
+    from app.database import IS_SQLITE
     from app.services.blocklist import load_rules
 
     if not ingest_lock.acquire(blocking=False):
@@ -49,23 +52,46 @@ def ingest_lite(db: Session) -> dict:
     added = skipped = rejected = invalid = 0
     summaries: list[dict] = []
     try:
+        if not IS_SQLITE:
+            try:
+                db.execute(text("SET LOCAL lock_timeout = '2000'"))
+                db.execute(text("SET LOCAL statement_timeout = '12000'"))
+            except Exception:
+                db.rollback()
         db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
         db.commit()
-        keywords = db.query(Keyword).all()
-        queries = db.query(SavedQuery).all()
-        rules = load_rules(db)
-        db.commit()
+
+        try:
+            keywords = db.query(Keyword).all()
+            queries = db.query(SavedQuery).all()
+            rules = load_rules(db)
+            db.commit()
+        except Exception as exc:
+            log.exception("lite meta query gagal: %s", exc)
+            db.rollback()
+            return {
+                "status": "selesai",
+                "mode": "cepat",
+                "path": "lite-stamp",
+                "added": 0,
+                "skipped": 0,
+                "rejected": 0,
+                "invalid_url": 0,
+                "alerts": 0,
+                "message": f"Stempel diperbarui; baca kamus gagal: {exc.__class__.__name__}",
+                "connectors": [],
+            }
 
         def _fetch() -> list:
             out = []
-            end = time.monotonic() + 12
+            end = time.monotonic() + 10
             try:
-                out.append(fetch_pemprov_portal(deadline=min(end, time.monotonic() + 6)))
+                out.append(fetch_pemprov_portal(deadline=min(end, time.monotonic() + 5)))
             except Exception as exc:
                 log.warning("lite pemprov: %s", exc)
             if time.monotonic() < end:
                 try:
-                    out.append(fetch_google_kpw_dki(min(end, time.monotonic() + 6)))
+                    out.append(fetch_google_kpw_dki(min(end, time.monotonic() + 5)))
                 except Exception as exc:
                     log.warning("lite kpw_dki: %s", exc)
             return out
@@ -73,18 +99,23 @@ def ingest_lite(db: Session) -> dict:
         fetched: list = []
         pool = ThreadPoolExecutor(max_workers=1)
         try:
-            fetched = pool.submit(_fetch).result(timeout=14)
+            fetched = pool.submit(_fetch).result(timeout=12)
         except FuturesTimeout:
-            summaries.append({"name": "fetch", "status": "gagal", "found": 0, "added": 0, "message": "Timeout fetch lite 14s"})
+            summaries.append({"name": "fetch", "status": "gagal", "found": 0, "added": 0, "message": "Timeout fetch lite 12s"})
         except Exception as exc:
             log.exception("lite fetch gagal: %s", exc)
         finally:
             pool.shutdown(wait=False, cancel_futures=True)
 
         for report in fetched:
-            # Batasi item supaya simpan cepat.
-            report.items = list(report.items or [])[:8]
-            result = _store_report(db, report, keywords, queries, rules, started)
+            report.items = list(report.items or [])[:6]
+            try:
+                result = _store_report(db, report, keywords, queries, rules, started)
+            except Exception as exc:
+                log.exception("lite store gagal: %s", exc)
+                db.rollback()
+                summaries.append({"name": report.name, "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
+                continue
             added += result["added"]
             skipped += result["skipped"]
             rejected += result["rejected"]
@@ -115,8 +146,8 @@ def ingest_lite(db: Session) -> dict:
             _set_running(db, False)
         except Exception:
             log.exception("Gagal mengosongkan penanda pengambilan")
-        ingest_lock.release()
-
+        if ingest_lock.locked():
+            ingest_lock.release()
 
 def start_ingest(mode: str = "cepat") -> dict:
     """Mulai pengambilan di thread terpisah agar request HTTP tidak digantung Vercel."""

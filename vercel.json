@@ -7,7 +7,7 @@
       "entrypoint": "Dockerfile.vercel",
       "functions": {
         "Dockerfile.vercel": {
-          "maxDuration": 300
+          "maxDuration": 60
         }
       }
     }
