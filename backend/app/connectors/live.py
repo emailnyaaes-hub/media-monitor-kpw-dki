@@ -391,12 +391,16 @@ def _fetch_google_archive(
     archive_limit: int = 3,
 ) -> FetchReport:
     """Tarik arsip Google News: when:7d dulu, lalu when:1y."""
-    since = now_wib() - timedelta(days=365)
+    on_vercel = bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"))
+    since = now_wib() - timedelta(days=14 if on_vercel else 365)
     items: list[RawItem] = []
     errors = 0
     seen: set[str] = set()
-    for when, limit in (("7d", recent_limit), ("1y", archive_limit)):
-        for query in queries:
+    # Di Vercel hanya jendela pendek + sedikit query agar request tidak hang.
+    windows = (("7d", min(recent_limit, 3)),) if on_vercel else (("7d", recent_limit), ("1y", archive_limit))
+    query_list = queries[:2] if on_vercel else queries
+    for when, limit in windows:
+        for query in query_list:
             if deadline is not None and time.monotonic() > deadline:
                 break
             try:

@@ -18,7 +18,8 @@ def fetch_bytes(url: str, *, timeout: int = 12, attempts: int = 2, data: bytes |
         try:
             request = Request(url, data=data, headers={"User-Agent": USER_AGENT, **(headers or {})})
             with urlopen(request, timeout=timeout) as response:
-                return response.read()
+                # Batasi baca agar koneksi lambat tidak menggantung tanpa batas.
+                return response.read(2_000_000)
         except HTTPError as exc:
             if exc.code in {429, 500, 502, 503, 504} and attempt + 1 < attempts:
                 time.sleep(2 ** attempt)

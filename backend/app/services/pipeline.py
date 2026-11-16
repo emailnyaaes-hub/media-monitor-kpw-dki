@@ -115,7 +115,7 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
         added = skipped = rejected = invalid = 0
         summaries = []
         any_ok = False
-        hard_deadline = time.monotonic() + (45 if on_vercel else 120)
+        hard_deadline = time.monotonic() + (32 if on_vercel else 120)
 
         def _consume(report) -> None:
             nonlocal added, skipped, rejected, invalid, any_ok
@@ -142,9 +142,6 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
 
         # Tematik dulu dan langsung disimpan — bila Vercel timeout, rubrik tetap terisi.
         if mode == "cepat":
-            from concurrent.futures import ThreadPoolExecutor, as_completed
-            from concurrent.futures import TimeoutError as FuturesTimeout
-
             from app.connectors.live import (
                 fetch_google_kpw_dki,
                 fetch_google_kpw_provinsi,
@@ -152,38 +149,55 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
                 fetch_pemprov_portal,
             )
 
-            # Portal/Google Pemprov dulu — hard cap agar tidak menggantung.
-            try:
-                _consume(fetch_pemprov_portal(deadline=min(hard_deadline, time.monotonic() + (8 if on_vercel else 12))))
-            except Exception as exc:
-                log.exception("Portal Pemprov gagal: %s", exc)
-
-            theme_budget = 12 if on_vercel else 16
-            theme_deadline = min(hard_deadline, time.monotonic() + theme_budget)
-            pool = ThreadPoolExecutor(max_workers=3)
-            try:
-                futures = [
-                    pool.submit(fetch_google_pemprov_dki, theme_deadline),
-                    pool.submit(fetch_google_kpw_dki, theme_deadline),
-                    pool.submit(fetch_google_kpw_provinsi, theme_deadline),
-                ]
-                for future in as_completed(futures, timeout=theme_budget):
-                    if time.monotonic() > hard_deadline:
+            if on_vercel:
+                # Jalur sempit berurutan: tanpa thread pool (sering hang di serverless).
+                for label, runner, budget in (
+                    ("pemprov", lambda d: fetch_pemprov_portal(deadline=d), 7),
+                    ("kpw_dki", lambda d: fetch_google_kpw_dki(d), 6),
+                    ("kpw_prov", lambda d: fetch_google_kpw_provinsi(d), 6),
+                    ("pemprov_g", lambda d: fetch_google_pemprov_dki(d), 6),
+                ):
+                    if time.monotonic() > hard_deadline - 2:
                         break
                     try:
-                        _consume(future.result(timeout=0.2))
+                        _consume(runner(min(hard_deadline, time.monotonic() + budget)))
                     except Exception as exc:
-                        log.exception("Arsip tematik gagal: %s", exc)
-            except (TimeoutError, FuturesTimeout):
-                log.warning("Batas waktu arsip tematik Google habis; lanjut.")
-            finally:
-                pool.shutdown(wait=False, cancel_futures=True)
-            db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
-            db.commit()
-            # Di Vercel jangan tarik RSS berat — sering menggantung sampai gateway timeout.
-            reports = []
-            if (not on_vercel) and added < 3 and time.monotonic() < hard_deadline - 5:
-                reports = collect_reports(since, rules, mode=mode, include_thematic=False)
+                        log.exception("Konektor %s gagal: %s", label, exc)
+                    db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
+                    db.commit()
+                reports = []
+            else:
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+                from concurrent.futures import TimeoutError as FuturesTimeout
+
+                try:
+                    _consume(fetch_pemprov_portal(deadline=time.monotonic() + 12))
+                except Exception as exc:
+                    log.exception("Portal Pemprov gagal: %s", exc)
+
+                theme_budget = 16
+                theme_deadline = time.monotonic() + theme_budget
+                pool = ThreadPoolExecutor(max_workers=3)
+                try:
+                    futures = [
+                        pool.submit(fetch_google_pemprov_dki, theme_deadline),
+                        pool.submit(fetch_google_kpw_dki, theme_deadline),
+                        pool.submit(fetch_google_kpw_provinsi, theme_deadline),
+                    ]
+                    for future in as_completed(futures, timeout=theme_budget):
+                        try:
+                            _consume(future.result(timeout=0.2))
+                        except Exception as exc:
+                            log.exception("Arsip tematik gagal: %s", exc)
+                except (TimeoutError, FuturesTimeout):
+                    log.warning("Batas waktu arsip tematik Google habis; lanjut.")
+                finally:
+                    pool.shutdown(wait=False, cancel_futures=True)
+                db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
+                db.commit()
+                reports = []
+                if added < 3 and time.monotonic() < hard_deadline - 5:
+                    reports = collect_reports(since, rules, mode=mode, include_thematic=False)
         else:
             from app.connectors.live import fetch_pemprov_portal
 
