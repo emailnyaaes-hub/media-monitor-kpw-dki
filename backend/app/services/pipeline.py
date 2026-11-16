@@ -163,32 +163,49 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
             )
 
             if fast_path:
-                # Paksa lepas tiap konektor: urlopen/Google kadang mengabaikan timeout di edge.
+                # Fetch di thread terpisah (tanpa Session DB). Main thread menunggu max 22s lalu lanjut simpan.
                 from concurrent.futures import ThreadPoolExecutor
                 from concurrent.futures import TimeoutError as FuturesTimeout
 
-                for label, runner, budget in (
-                    ("pemprov", lambda d: fetch_pemprov_portal(deadline=d), 8),
-                    ("kpw_dki", lambda d: fetch_google_kpw_dki(d), 8),
-                    ("kpw_prov", lambda d: fetch_google_kpw_provinsi(d), 8),
-                    ("pemprov_g", lambda d: fetch_google_pemprov_dki(d), 8),
-                ):
-                    if time.monotonic() > hard_deadline - 1:
+                def _fetch_fast() -> list:
+                    out = []
+                    end = time.monotonic() + 20
+                    jobs = (
+                        ("pemprov", lambda: fetch_pemprov_portal(deadline=min(end, time.monotonic() + 7))),
+                        ("kpw_dki", lambda: fetch_google_kpw_dki(min(end, time.monotonic() + 7))),
+                        ("kpw_prov", lambda: fetch_google_kpw_provinsi(min(end, time.monotonic() + 6))),
+                        ("pemprov_g", lambda: fetch_google_pemprov_dki(min(end, time.monotonic() + 6))),
+                    )
+                    for label, job in jobs:
+                        if time.monotonic() >= end:
+                            break
+                        try:
+                            out.append(job())
+                        except Exception as exc:
+                            log.warning("Fetch %s gagal: %s", label, exc)
+                    return out
+
+                fetched: list = []
+                pool = ThreadPoolExecutor(max_workers=1)
+                try:
+                    fetched = pool.submit(_fetch_fast).result(timeout=22)
+                except FuturesTimeout:
+                    log.warning("Fetch cepat dipotong setelah 22s")
+                    summaries.append(
+                        {"name": "fetch", "status": "gagal", "found": 0, "added": 0, "message": "Timeout fetch 22s"}
+                    )
+                except Exception as exc:
+                    log.exception("Fetch cepat gagal: %s", exc)
+                finally:
+                    pool.shutdown(wait=False, cancel_futures=True)
+
+                for report in fetched:
+                    if time.monotonic() > hard_deadline:
                         break
-                    pool = ThreadPoolExecutor(max_workers=1)
                     try:
-                        fut = pool.submit(runner, min(hard_deadline, time.monotonic() + budget))
-                        report = fut.result(timeout=budget + 1)
                         _consume(report)
-                    except FuturesTimeout:
-                        log.warning("Konektor %s dipotong (timeout %ss)", label, budget)
-                        summaries.append(
-                            {"name": label, "status": "gagal", "found": 0, "added": 0, "message": "Timeout konektor"}
-                        )
                     except Exception as exc:
-                        log.exception("Konektor %s gagal: %s", label, exc)
-                    finally:
-                        pool.shutdown(wait=False, cancel_futures=True)
+                        log.exception("Simpan laporan gagal: %s", exc)
                     db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
                     db.commit()
                 reports = []
