@@ -85,9 +85,15 @@ def is_public_article(url: str) -> bool:
     host = urlsplit(url).netloc.lower()
     if host in {"jakarta.go.id", "www.jakarta.go.id"}:
         return True
-    # Di Vercel, probe HTTP per-URL sering hang (egress lambat) dan memblokir seluruh ingest.
+    # Probe HTTP per-URL sering hang (egress lambat) dan memblokir seluruh ingest.
     # Percayai URL penerbit hasil decode Google/RSS selama skema http(s) valid.
-    if os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"):
+    # Aktif di Vercel ATAU saat BI_SKIP_URL_PROBE=1 (jalur cepat produksi).
+    if (
+        os.environ.get("VERCEL")
+        or os.environ.get("VERCEL_ENV")
+        or os.environ.get("VERCEL_URL")
+        or os.environ.get("BI_SKIP_URL_PROBE") == "1"
+    ):
         return bool(host) and urlsplit(url).scheme in {"http", "https"}
     try:
         status = http_status(url)

@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -r
 COPY backend/requirements.txt backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 # Bust layer cache: ubah nilai default tiap rilis backend penting.
-ARG CACHEBUST=skip-http-probe-vercel-20261116
+ARG CACHEBUST=force-fast-ingest-20261116
 RUN echo "cachebust=$CACHEBUST"
 COPY backend/ backend/
 # SPA build: app.main DIST = /app/frontend/dist (parents[2] dari backend/app/main.py)
@@ -24,5 +24,7 @@ WORKDIR /app/backend
 ENV PORT=8000
 ENV TZ=Asia/Jakarta
 ENV PYTHONUNBUFFERED=1
+ENV BI_SKIP_URL_PROBE=1
+ENV BI_FAST_INGEST=1
 EXPOSE 8000
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

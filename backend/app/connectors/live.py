@@ -391,7 +391,12 @@ def _fetch_google_archive(
     archive_limit: int = 3,
 ) -> FetchReport:
     """Tarik arsip Google News: when:7d dulu, lalu when:1y."""
-    on_vercel = bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"))
+    on_vercel = bool(
+        os.environ.get("VERCEL")
+        or os.environ.get("VERCEL_ENV")
+        or os.environ.get("VERCEL_URL")
+        or os.environ.get("BI_FAST_INGEST") == "1"
+    )
     since = now_wib() - timedelta(days=14 if on_vercel else 365)
     items: list[RawItem] = []
     errors = 0

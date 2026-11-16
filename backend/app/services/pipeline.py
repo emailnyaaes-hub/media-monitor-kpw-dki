@@ -99,8 +99,15 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
         import os
         import time
 
-        on_vercel = bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"))
-        # Di Vercel request sering dipotong; stempel dulu supaya UI tidak terlihat basi.
+        on_vercel = bool(
+            os.environ.get("VERCEL")
+            or os.environ.get("VERCEL_ENV")
+            or os.environ.get("VERCEL_URL")
+            or os.environ.get("VERCEL_REGION")
+        )
+        # Mode cepat selalu jalur sempit (tombol Perbarui / cron) agar tidak hang.
+        fast_path = mode == "cepat"
+        # Stempel dulu supaya UI tidak terlihat basi bila request dipotong.
         db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
         db.commit()
 
@@ -111,11 +118,17 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
 
         rules = load_rules(db)
         db.commit()
-        log.info("Pengambilan %s mulai. Jendela sejak %s vercel=%s", mode, since.isoformat(timespec="minutes"), on_vercel)
+        log.info(
+            "Pengambilan %s mulai. Jendela sejak %s vercel=%s fast=%s",
+            mode,
+            since.isoformat(timespec="minutes"),
+            on_vercel,
+            fast_path,
+        )
         added = skipped = rejected = invalid = 0
         summaries = []
         any_ok = False
-        hard_deadline = time.monotonic() + (32 if on_vercel else 120)
+        hard_deadline = time.monotonic() + (32 if fast_path else 120)
 
         def _consume(report) -> None:
             nonlocal added, skipped, rejected, invalid, any_ok
@@ -149,7 +162,7 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
                 fetch_pemprov_portal,
             )
 
-            if on_vercel:
+            if fast_path:
                 # Paksa lepas tiap konektor: urlopen/Google kadang mengabaikan timeout di edge.
                 from concurrent.futures import ThreadPoolExecutor
                 from concurrent.futures import TimeoutError as FuturesTimeout
@@ -234,8 +247,8 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
             from app.services.dss import refresh_advices
 
             advice = refresh_advices(db)
-        elif mode == "cepat" and added and (not on_vercel):
-            # rebuild_issues berat di Vercel; tunda agar respons ingest tidak hang.
+        elif mode == "cepat" and added and (not fast_path):
+            # rebuild_issues ditunda di jalur cepat agar respons tidak hang.
             created = rebuild_issues(db)
         db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
         if any_ok or added:
