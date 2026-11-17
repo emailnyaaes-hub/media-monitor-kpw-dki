@@ -11,6 +11,7 @@ import { formatNumber, formatPct, isoDate, PLATFORM_LABEL, relativeTime } from '
 import type { MentionCard, Overview, TrendPoint } from '../types'
 
 const RUBRIK = [
+  { id: 'terbaru', label: 'Terbaru', hint: 'Semua berita terbaru lintas kanal — mulai dari sini untuk pantauan hari ini.' },
   { id: 'bi_nasional', label: 'Berita Nasional', hint: 'Bank Indonesia, moneter, rupiah, inflasi, keuangan daerah, QRIS, dan mandat BI.' },
   { id: 'kpw_dki', label: 'KPwBI DKI Jakarta', hint: 'KPw BI DKI Jakarta, program lokal, dan berita BI/Jakarta terkait (arsip hingga 1 tahun).' },
   { id: 'kpw_provinsi', label: 'KPwBI', hint: 'Kantor Perwakilan BI di luar DKI — Jawa, Sumatera, Bali, Sulawesi, dan lainnya (arsip hingga 1 tahun).' },
@@ -20,11 +21,11 @@ const RUBRIK = [
 export default function OverviewPage() {
   const filters = useFilters()
   const navigate = useNavigate()
-  const [rubrik, setRubrik] = useState<(typeof RUBRIK)[number]['id']>('bi_nasional')
+  const [rubrik, setRubrik] = useState<(typeof RUBRIK)[number]['id']>('terbaru')
   const [grain, setGrain] = useState<'day' | 'week' | 'month'>('day')
   const mentionQuery = (() => {
     const params = new URLSearchParams(filters.query)
-    params.set('feed_section', rubrik)
+    if (rubrik !== 'terbaru') params.set('feed_section', rubrik)
     const end = new Date()
     const start = new Date()
     start.setFullYear(end.getFullYear() - 1)
@@ -45,7 +46,7 @@ export default function OverviewPage() {
   const rubrikMeta = RUBRIK.find((item) => item.id === rubrik) ?? RUBRIK[0]
 
   function openAll() {
-    navigate(`/explorer?feed_section=${encodeURIComponent(rubrik)}`)
+    navigate(rubrik === 'terbaru' ? '/explorer' : `/explorer?feed_section=${encodeURIComponent(rubrik)}`)
   }
 
   return (

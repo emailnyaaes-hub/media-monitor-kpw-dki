@@ -34,11 +34,11 @@ CITIES = [
 
 
 def ingest_lite(db: Session) -> dict:
-    """Jalur produksi: stempel + 1 RSS Detik, timeout socket 2s, tanpa clear-flag di session request."""
+    """Jalur produksi: RSS media utama (7 hari) + Google BI singkat, respons <~20 detik."""
     import socket
     import time
 
-    from app.connectors.live import fetch_direct
+    from app.connectors.live import DIRECT_FEEDS, fetch_direct, fetch_google_kpw_dki, fetch_pemprov_portal
     from app.database import SessionLocal
     from app.services.blocklist import load_rules
 
@@ -49,8 +49,18 @@ def ingest_lite(db: Session) -> dict:
     t0 = time.monotonic()
     summaries: list[dict] = []
     added = skipped = rejected = invalid = 0
+
+    def _consume(report) -> None:
+        nonlocal added, skipped, rejected, invalid
+        report.items = list(report.items or [])[:6]
+        result = _store_report(db, report, keywords, queries, rules, started)
+        added += result["added"]
+        skipped += result["skipped"]
+        rejected += result["rejected"]
+        invalid += result["invalid_url"]
+        summaries.append(result["summary"])
+
     try:
-        # Stempel lewat session samping — jangan kunci session request.
         side = SessionLocal()
         try:
             side.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
@@ -59,30 +69,20 @@ def ingest_lite(db: Session) -> dict:
         finally:
             side.close()
 
+        keywords = db.query(Keyword).all()
+        queries = db.query(SavedQuery).all()
+        rules = load_rules(db)
+        # Jendela 7 hari — jangan pakai last_ingest-6jam (terlalu sempit, feed sering kosong).
+        since = now_wib() - timedelta(days=7)
+
         old_timeout = socket.getdefaulttimeout()
         socket.setdefaulttimeout(2)
         try:
-            keywords = db.query(Keyword).all()
-            queries = db.query(SavedQuery).all()
-            rules = load_rules(db)
-            since = _since(db)
-            feeds = (
-                ("Detik Finance", 1, "https://finance.detik.com/rss"),
-                ("Antara Ekonomi", 1, "https://www.antaranews.com/rss/ekonomi.xml"),
-                ("CNN Indonesia Ekonomi", 1, "https://www.cnnindonesia.com/ekonomi/rss"),
-            )
-            for name, tier, url in feeds:
+            for name, tier, url in DIRECT_FEEDS:
                 if time.monotonic() - t0 > 12:
                     break
                 try:
-                    report = fetch_direct(name, tier, url, since)
-                    report.items = list(report.items or [])[:4]
-                    result = _store_report(db, report, keywords, queries, rules, started)
-                    added += result["added"]
-                    skipped += result["skipped"]
-                    rejected += result["rejected"]
-                    invalid += result["invalid_url"]
-                    summaries.append(result["summary"])
+                    _consume(fetch_direct(name, tier, url, since))
                 except Exception as exc:
                     log.exception("lite RSS %s gagal: %s", name, exc)
                     try:
@@ -90,25 +90,57 @@ def ingest_lite(db: Session) -> dict:
                     except Exception:
                         pass
                     summaries.append({"name": name, "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
+
+            # Google singkat untuk BI/Pemprov agar rubrik Ringkasan terisi berita baru.
+            if time.monotonic() - t0 < 16:
+                try:
+                    _consume(fetch_pemprov_portal(deadline=t0 + 18))
+                except Exception as exc:
+                    log.exception("lite pemprov gagal: %s", exc)
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+            if time.monotonic() - t0 < 18:
+                try:
+                    _consume(fetch_google_kpw_dki(t0 + 20))
+                except Exception as exc:
+                    log.exception("lite kpw_dki gagal: %s", exc)
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+            if time.monotonic() - t0 < 20:
+                try:
+                    from app.connectors.live import FetchReport, _google_query
+
+                    batch, failed = _google_query('"Bank Indonesia" OR BI-Rate OR rupiah', since, limit=3, deadline=t0 + 22, when="7d")
+                    _consume(
+                        FetchReport(
+                            "Google News BI",
+                            "berhasil" if batch else "gagal",
+                            f"{len(batch)} berita BI. {failed} tautan gagal diurai." if batch else "Tidak ada hasil BI.",
+                            batch,
+                        )
+                    )
+                except Exception as exc:
+                    log.exception("lite google BI gagal: %s", exc)
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+
             db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
             if added:
                 db.merge(AppMeta(key="data_mode", value="live"))
             db.commit()
-        except Exception as exc:
-            log.exception("lite RSS gagal: %s", exc)
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            if not summaries:
-                summaries.append({"name": "RSS", "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
         finally:
             socket.setdefaulttimeout(old_timeout)
 
         return {
             "status": "selesai",
             "mode": "cepat",
-            "path": "lite-rss",
+            "path": "lite-fresh",
             "added": added,
             "skipped": skipped,
             "rejected": rejected,
