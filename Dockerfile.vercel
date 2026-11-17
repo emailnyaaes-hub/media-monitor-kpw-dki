@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -r
 COPY backend/requirements.txt backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 # Bust layer cache: ubah nilai default tiap rilis backend penting.
-ARG CACHEBUST=ingest-one-rss-3s-20261117
+ARG CACHEBUST=ingest-finally-side-session-20261117
 RUN echo "cachebust=$CACHEBUST"
 COPY backend/ backend/
 # SPA build: app.main DIST = /app/frontend/dist (parents[2] dari backend/app/main.py)

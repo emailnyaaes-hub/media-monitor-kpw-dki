@@ -137,8 +137,16 @@ def ingest_lite(db: Session) -> dict:
         log.exception("ingest_lite gagal")
         return {"status": "gagal", "mode": "cepat", "path": "lite", "added": 0, "error": f"{exc.__class__.__name__}: {exc}"}
     finally:
+        # Jangan pakai session request di sini — commit clear-flag sering mengunci dan menahan respons HTTP.
         try:
-            _set_running(db, False)
+            from app.database import SessionLocal
+
+            side = SessionLocal()
+            try:
+                side.merge(AppMeta(key="ingest_running_since", value=""))
+                side.commit()
+            finally:
+                side.close()
         except Exception:
             log.exception("Gagal mengosongkan penanda pengambilan")
         if ingest_lock.locked():
@@ -409,10 +417,18 @@ def ingest(db: Session, mode: str = "cepat") -> dict:
         }
     finally:
         try:
-            _set_running(db, False)
+            from app.database import SessionLocal
+
+            side = SessionLocal()
+            try:
+                side.merge(AppMeta(key="ingest_running_since", value=""))
+                side.commit()
+            finally:
+                side.close()
         except Exception:
             log.exception("Gagal mengosongkan penanda pengambilan")
-        ingest_lock.release()
+        if ingest_lock.locked():
+            ingest_lock.release()
 
 
 def needs_refresh(db: Session) -> bool:
