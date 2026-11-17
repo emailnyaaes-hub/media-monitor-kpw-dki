@@ -19,10 +19,13 @@ def publisher_url(google_url: str) -> str:
     if parsed.hostname != "news.google.com" or len(pieces) < 2 or pieces[-2] not in {"articles", "read"}:
         return ""
     token = pieces[-1]
+    import os
+
+    timeout = 2 if (os.environ.get("BI_FAST_INGEST") == "1" or os.environ.get("VERCEL")) else 5
     html = fetch_bytes(
         f"https://news.google.com/rss/articles/{token}",
         headers={"User-Agent": "Mozilla/5.0"},
-        timeout=5,
+        timeout=timeout,
         attempts=1,
     ).decode("utf-8", "replace")
     signature = re.search(r'data-n-a-sg="([^"]+)"', html)
@@ -42,7 +45,7 @@ def publisher_url(google_url: str) -> str:
             "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
             "User-Agent": "Mozilla/5.0",
         },
-        timeout=5,
+        timeout=timeout,
         attempts=1,
     ).decode("utf-8", "replace")
     parsed_data = json.loads(raw.split("\n\n", 1)[1])

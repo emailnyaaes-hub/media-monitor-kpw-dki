@@ -64,18 +64,31 @@ def ingest_lite(db: Session) -> dict:
         rules = load_rules(db)
         db.commit()
 
-        # Sync singkat saja — jangan thread/process (sering deadlock dengan SQLAlchemy di serverless).
-        deadline = time.monotonic() + 12
-        for label, runner in (
-            ("pemprov", lambda: fetch_pemprov_portal(deadline=min(deadline, time.monotonic() + 5))),
-            ("kpw_dki", lambda: fetch_google_kpw_dki(min(deadline, time.monotonic() + 5))),
-        ):
-            if time.monotonic() >= deadline:
-                summaries.append({"name": label, "status": "gagal", "found": 0, "added": 0, "message": "Skip: batas waktu"})
-                continue
+        # Satu sumber dulu, max 2 item — decode Google mahal; prioritaskan respons cepat.
+        deadline = time.monotonic() + 10
+        try:
+            report = fetch_pemprov_portal(deadline=deadline)
+            report.items = list(report.items or [])[:2]
+            result = _store_report(db, report, keywords, queries, rules, started)
+            added += result["added"]
+            skipped += result["skipped"]
+            rejected += result["rejected"]
+            invalid += result["invalid_url"]
+            summaries.append(result["summary"])
+        except Exception as exc:
+            log.exception("lite pemprov gagal: %s", exc)
             try:
-                report = runner()
-                report.items = list(report.items or [])[:5]
+                db.rollback()
+            except Exception:
+                pass
+            summaries.append({"name": "pemprov", "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
+        db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
+        db.commit()
+
+        if time.monotonic() < deadline - 3 and added < 1:
+            try:
+                report = fetch_google_kpw_dki(deadline)
+                report.items = list(report.items or [])[:2]
                 result = _store_report(db, report, keywords, queries, rules, started)
                 added += result["added"]
                 skipped += result["skipped"]
@@ -83,12 +96,12 @@ def ingest_lite(db: Session) -> dict:
                 invalid += result["invalid_url"]
                 summaries.append(result["summary"])
             except Exception as exc:
-                log.exception("lite %s gagal: %s", label, exc)
+                log.exception("lite kpw_dki gagal: %s", exc)
                 try:
                     db.rollback()
                 except Exception:
                     pass
-                summaries.append({"name": label, "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
+                summaries.append({"name": "kpw_dki", "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
             db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
             db.commit()
 
