@@ -19,7 +19,6 @@ export default function ExplorerPage() {
   const [minRisk, setMinRisk] = useState('')
   const [sort, setSort] = useState('terbaru')
   const [page, setPage] = useState(1)
-  const [density, setDensity] = useState<'nyaman' | 'ringkas'>(() => (localStorage.getItem('bi-density') === 'ringkas' ? 'ringkas' : 'nyaman'))
   const [openId, setOpenId] = useState<number | null>(params.get('m') ? Number(params.get('m')) : null)
 
   useEffect(() => {
@@ -89,13 +88,6 @@ export default function ExplorerPage() {
         <Card className="overflow-x-auto">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm text-muted">{data.data.total} berita</p>
-            <div className="flex gap-1">
-              {(['nyaman', 'ringkas'] as const).map((item) => (
-                <button key={item} className={`h-11 rounded-md px-3 text-sm capitalize ${density === item ? 'bg-navy-900 text-white' : 'border border-line'}`} onClick={() => { setDensity(item); localStorage.setItem('bi-density', item) }}>
-                  {item === 'nyaman' ? 'Nyaman' : 'Ringkas'}
-                </button>
-              ))}
-            </div>
           </div>
           <ul className="divide-y divide-line md:hidden">
             {data.data.items.map((item) => (
@@ -109,7 +101,7 @@ export default function ExplorerPage() {
               </li>
             ))}
           </ul>
-          <table className={`hidden w-full min-w-[860px] text-left md:table ${density === 'ringkas' ? 'text-sm' : 'text-base'}`}>
+          <table className="hidden w-full min-w-[860px] text-left text-sm md:table">
             <thead className="sticky top-0 bg-card text-sm text-muted">
               <tr>
                 <th className="py-2 pr-3">Waktu</th><th className="pr-3">Judul</th><th className="pr-3">Sumber</th><th className="pr-3">Stance</th><th className="pr-3">Sentimen</th><th className="pr-3">Risiko</th><th className="pr-3">Status</th><th>Tautan</th>
@@ -118,7 +110,7 @@ export default function ExplorerPage() {
             <tbody>
               {data.data.items.map((item) => (
                 <tr key={item.id} className="cursor-pointer border-t border-line" onClick={() => { setOpenId(item.id); setParams({ m: String(item.id) }) }}>
-                  <td className={`${density === 'ringkas' ? 'py-2' : 'py-3'} whitespace-nowrap pr-3`} title={`${formatWhen(item.published_at)} WIB`}>{relativeTime(item.published_at)}</td>
+                  <td className="whitespace-nowrap py-2 pr-3" title={`${formatWhen(item.published_at)} WIB`}>{relativeTime(item.published_at)}</td>
                   <td className="max-w-md pr-3"><span className="line-clamp-2"><QuoteBadge show={item.quotes_bi} /> {item.title}</span></td>
                   <td className="pr-3">{item.source_name}<span className="block text-sm text-muted">{PLATFORM_LABEL[item.platform]}</span></td>
                   <td className="pr-3"><StanceBadge stance={item.stance} /></td>
