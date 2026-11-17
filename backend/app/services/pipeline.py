@@ -39,7 +39,6 @@ def ingest_lite(db: Session) -> dict:
 
     from sqlalchemy import text
 
-    from app.connectors.live import fetch_google_kpw_dki, fetch_pemprov_portal
     from app.database import IS_SQLITE
     from app.services.blocklist import load_rules
 
@@ -59,51 +58,44 @@ def ingest_lite(db: Session) -> dict:
         db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
         db.commit()
 
+        import socket
+
+        from app.connectors.live import fetch_direct
+
         keywords = db.query(Keyword).all()
         queries = db.query(SavedQuery).all()
         rules = load_rules(db)
         db.commit()
 
-        # Satu sumber dulu, max 2 item — decode Google mahal; prioritaskan respons cepat.
-        deadline = time.monotonic() + 10
+        # RSS langsung (tanpa decode Google) — jauh lebih aman di Vercel.
+        old_timeout = socket.getdefaulttimeout()
+        socket.setdefaulttimeout(4)
+        since = _since(db)
         try:
-            report = fetch_pemprov_portal(deadline=deadline)
-            report.items = list(report.items or [])[:2]
-            result = _store_report(db, report, keywords, queries, rules, started)
-            added += result["added"]
-            skipped += result["skipped"]
-            rejected += result["rejected"]
-            invalid += result["invalid_url"]
-            summaries.append(result["summary"])
-        except Exception as exc:
-            log.exception("lite pemprov gagal: %s", exc)
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            summaries.append({"name": "pemprov", "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
-        db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
-        db.commit()
-
-        if time.monotonic() < deadline - 3 and added < 1:
-            try:
-                report = fetch_google_kpw_dki(deadline)
-                report.items = list(report.items or [])[:2]
-                result = _store_report(db, report, keywords, queries, rules, started)
-                added += result["added"]
-                skipped += result["skipped"]
-                rejected += result["rejected"]
-                invalid += result["invalid_url"]
-                summaries.append(result["summary"])
-            except Exception as exc:
-                log.exception("lite kpw_dki gagal: %s", exc)
+            for name, tier, url in (
+                ("Detik Finance", 1, "https://finance.detik.com/rss"),
+                ("Antara Ekonomi", 1, "https://www.antaranews.com/rss/ekonomi.xml"),
+            ):
                 try:
-                    db.rollback()
-                except Exception:
-                    pass
-                summaries.append({"name": "kpw_dki", "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
-            db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
-            db.commit()
+                    report = fetch_direct(name, tier, url, since)
+                    report.items = list(report.items or [])[:4]
+                    result = _store_report(db, report, keywords, queries, rules, started)
+                    added += result["added"]
+                    skipped += result["skipped"]
+                    rejected += result["rejected"]
+                    invalid += result["invalid_url"]
+                    summaries.append(result["summary"])
+                except Exception as exc:
+                    log.exception("lite RSS %s gagal: %s", name, exc)
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+                    summaries.append({"name": name, "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
+                db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
+                db.commit()
+        finally:
+            socket.setdefaulttimeout(old_timeout)
 
         if added:
             db.merge(AppMeta(key="data_mode", value="live"))
