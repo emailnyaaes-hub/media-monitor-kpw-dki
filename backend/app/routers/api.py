@@ -1054,26 +1054,17 @@ def job_ingest(
     _: CurrentUser = Depends(require_writer),
 ):
     """mode=cepat: RSS langsung. Di Vercel wajib sinkron agar proses tidak terbunuh."""
-    from app.services.pipeline import _set_running, ingest_running
-
-    # Tombol Perbarui: bersihkan kunci macet dari request Vercel yang timeout.
-    if force or wait:
-        if ingest_running(db):
-            _set_running(db, False)
-    from app.services.pipeline import ingest_lite, start_ingest
-
-    # Produksi: jalur lite agar tidak hang (Vercel container / egress lambat).
     from fastapi.responses import JSONResponse
 
+    from app.services.pipeline import ingest_lite, start_ingest
+
+    # Produksi: jalur lite. Jangan clear-flag di session request (sering mengunci respons).
+    _ = force
     if wait or os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV") or os.environ.get("BI_FAST_INGEST") == "1":
         if mode == "penuh":
             payload = ingest(db, mode="penuh")
         else:
             payload = ingest_lite(db)
-        try:
-            db.commit()
-        except Exception:
-            db.rollback()
         return JSONResponse(content=payload, headers={"Connection": "close", "Cache-Control": "no-store"})
     return start_ingest(mode)
 

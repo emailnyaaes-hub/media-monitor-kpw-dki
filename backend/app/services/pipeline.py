@@ -34,93 +34,60 @@ CITIES = [
 
 
 def ingest_lite(db: Session) -> dict:
-    """Jalur produksi paling pendek: sync murni, tanpa thread/process (aman di Vercel)."""
+    """Jalur produksi: stempel + 1 RSS Detik, timeout socket 2s, tanpa clear-flag di session request."""
+    import socket
     import time
 
-    from sqlalchemy import text
-
-    from app.database import IS_SQLITE
+    from app.connectors.live import fetch_direct
+    from app.database import SessionLocal
     from app.services.blocklist import load_rules
 
     if not ingest_lock.acquire(blocking=False):
         return {"status": "sedang_berjalan", "mode": "cepat", "added": 0, "skipped": 0, "rejected": 0, "invalid_url": 0, "alerts": 0}
+
     started = now_wib()
-    _set_running(db, True)
-    added = skipped = rejected = invalid = 0
+    t0 = time.monotonic()
     summaries: list[dict] = []
+    added = skipped = rejected = invalid = 0
     try:
-        if not IS_SQLITE:
-            try:
-                db.execute(text("SET LOCAL lock_timeout = '2000'"))
-                db.execute(text("SET LOCAL statement_timeout = '20000'"))
-            except Exception:
-                db.rollback()
-        db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
-        db.commit()
+        # Stempel lewat session samping — jangan kunci session request.
+        side = SessionLocal()
+        try:
+            side.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
+            side.merge(AppMeta(key="ingest_running_since", value=now_wib().isoformat(timespec="minutes")))
+            side.commit()
+        finally:
+            side.close()
 
-        import socket
-
-        from app.connectors.live import fetch_direct
-
-        # Ambil kamus; bila DB terkunci lama, tetap kembalikan stempel agar UI tidak hang.
+        old_timeout = socket.getdefaulttimeout()
+        socket.setdefaulttimeout(2)
         try:
             keywords = db.query(Keyword).all()
             queries = db.query(SavedQuery).all()
             rules = load_rules(db)
+            since = _since(db)
+            report = fetch_direct("Detik Finance", 1, "https://finance.detik.com/rss", since)
+            report.items = list(report.items or [])[:3]
+            result = _store_report(db, report, keywords, queries, rules, started)
+            added = result["added"]
+            skipped = result["skipped"]
+            rejected = result["rejected"]
+            invalid = result["invalid_url"]
+            summaries.append(result["summary"])
+            db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
+            if added:
+                db.merge(AppMeta(key="data_mode", value="live"))
             db.commit()
         except Exception as exc:
-            log.exception("lite kamus gagal: %s", exc)
+            log.exception("lite RSS gagal: %s", exc)
             try:
                 db.rollback()
             except Exception:
                 pass
-            return {
-                "status": "selesai",
-                "mode": "cepat",
-                "path": "lite-stamp",
-                "added": 0,
-                "skipped": 0,
-                "rejected": 0,
-                "invalid_url": 0,
-                "alerts": 0,
-                "issues": 0,
-                "connectors": [],
-                "message": f"Stempel diperbarui; kamus belum terbaca ({exc.__class__.__name__})",
-            }
-
-        # RSS langsung (tanpa decode Google) — jauh lebih aman di Vercel.
-        old_timeout = socket.getdefaulttimeout()
-        socket.setdefaulttimeout(3)
-        since = _since(db)
-        try:
-            for name, tier, url in (
-                ("Detik Finance", 1, "https://finance.detik.com/rss"),
-            ):
-                try:
-                    report = fetch_direct(name, tier, url, since)
-                    report.items = list(report.items or [])[:3]
-                    result = _store_report(db, report, keywords, queries, rules, started)
-                    added += result["added"]
-                    skipped += result["skipped"]
-                    rejected += result["rejected"]
-                    invalid += result["invalid_url"]
-                    summaries.append(result["summary"])
-                except Exception as exc:
-                    log.exception("lite RSS %s gagal: %s", name, exc)
-                    try:
-                        db.rollback()
-                    except Exception:
-                        pass
-                    summaries.append({"name": name, "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
-                db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
-                db.commit()
-                break  # satu feed cukup untuk respons cepat
+            summaries.append({"name": "Detik Finance", "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
         finally:
             socket.setdefaulttimeout(old_timeout)
 
-        if added:
-            db.merge(AppMeta(key="data_mode", value="live"))
-            db.commit()
         return {
             "status": "selesai",
             "mode": "cepat",
@@ -132,15 +99,13 @@ def ingest_lite(db: Session) -> dict:
             "alerts": 0,
             "issues": 0,
             "connectors": summaries,
+            "elapsed_ms": int((time.monotonic() - t0) * 1000),
         }
     except Exception as exc:
         log.exception("ingest_lite gagal")
         return {"status": "gagal", "mode": "cepat", "path": "lite", "added": 0, "error": f"{exc.__class__.__name__}: {exc}"}
     finally:
-        # Jangan pakai session request di sini — commit clear-flag sering mengunci dan menahan respons HTTP.
         try:
-            from app.database import SessionLocal
-
             side = SessionLocal()
             try:
                 side.merge(AppMeta(key="ingest_running_since", value=""))
