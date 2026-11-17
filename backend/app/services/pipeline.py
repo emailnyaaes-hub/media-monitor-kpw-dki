@@ -62,23 +62,43 @@ def ingest_lite(db: Session) -> dict:
 
         from app.connectors.live import fetch_direct
 
-        keywords = db.query(Keyword).all()
-        queries = db.query(SavedQuery).all()
-        rules = load_rules(db)
-        db.commit()
+        # Ambil kamus; bila DB terkunci lama, tetap kembalikan stempel agar UI tidak hang.
+        try:
+            keywords = db.query(Keyword).all()
+            queries = db.query(SavedQuery).all()
+            rules = load_rules(db)
+            db.commit()
+        except Exception as exc:
+            log.exception("lite kamus gagal: %s", exc)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            return {
+                "status": "selesai",
+                "mode": "cepat",
+                "path": "lite-stamp",
+                "added": 0,
+                "skipped": 0,
+                "rejected": 0,
+                "invalid_url": 0,
+                "alerts": 0,
+                "issues": 0,
+                "connectors": [],
+                "message": f"Stempel diperbarui; kamus belum terbaca ({exc.__class__.__name__})",
+            }
 
         # RSS langsung (tanpa decode Google) — jauh lebih aman di Vercel.
         old_timeout = socket.getdefaulttimeout()
-        socket.setdefaulttimeout(4)
+        socket.setdefaulttimeout(3)
         since = _since(db)
         try:
             for name, tier, url in (
                 ("Detik Finance", 1, "https://finance.detik.com/rss"),
-                ("Antara Ekonomi", 1, "https://www.antaranews.com/rss/ekonomi.xml"),
             ):
                 try:
                     report = fetch_direct(name, tier, url, since)
-                    report.items = list(report.items or [])[:4]
+                    report.items = list(report.items or [])[:3]
                     result = _store_report(db, report, keywords, queries, rules, started)
                     added += result["added"]
                     skipped += result["skipped"]
@@ -94,6 +114,7 @@ def ingest_lite(db: Session) -> dict:
                     summaries.append({"name": name, "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
                 db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
                 db.commit()
+                break  # satu feed cukup untuk respons cepat
         finally:
             socket.setdefaulttimeout(old_timeout)
 
@@ -103,7 +124,7 @@ def ingest_lite(db: Session) -> dict:
         return {
             "status": "selesai",
             "mode": "cepat",
-            "path": "lite-sync",
+            "path": "lite-rss",
             "added": added,
             "skipped": skipped,
             "rejected": rejected,
