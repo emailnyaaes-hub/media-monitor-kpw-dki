@@ -66,14 +66,30 @@ def ingest_lite(db: Session) -> dict:
             queries = db.query(SavedQuery).all()
             rules = load_rules(db)
             since = _since(db)
-            report = fetch_direct("Detik Finance", 1, "https://finance.detik.com/rss", since)
-            report.items = list(report.items or [])[:3]
-            result = _store_report(db, report, keywords, queries, rules, started)
-            added = result["added"]
-            skipped = result["skipped"]
-            rejected = result["rejected"]
-            invalid = result["invalid_url"]
-            summaries.append(result["summary"])
+            feeds = (
+                ("Detik Finance", 1, "https://finance.detik.com/rss"),
+                ("Antara Ekonomi", 1, "https://www.antaranews.com/rss/ekonomi.xml"),
+                ("CNN Indonesia Ekonomi", 1, "https://www.cnnindonesia.com/ekonomi/rss"),
+            )
+            for name, tier, url in feeds:
+                if time.monotonic() - t0 > 12:
+                    break
+                try:
+                    report = fetch_direct(name, tier, url, since)
+                    report.items = list(report.items or [])[:4]
+                    result = _store_report(db, report, keywords, queries, rules, started)
+                    added += result["added"]
+                    skipped += result["skipped"]
+                    rejected += result["rejected"]
+                    invalid += result["invalid_url"]
+                    summaries.append(result["summary"])
+                except Exception as exc:
+                    log.exception("lite RSS %s gagal: %s", name, exc)
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+                    summaries.append({"name": name, "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
             db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
             if added:
                 db.merge(AppMeta(key="data_mode", value="live"))
@@ -84,7 +100,8 @@ def ingest_lite(db: Session) -> dict:
                 db.rollback()
             except Exception:
                 pass
-            summaries.append({"name": "Detik Finance", "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
+            if not summaries:
+                summaries.append({"name": "RSS", "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
         finally:
             socket.setdefaulttimeout(old_timeout)
 
