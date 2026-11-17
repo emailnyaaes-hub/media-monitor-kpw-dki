@@ -7,6 +7,6 @@
   <rect x="29.5" y="34" width="2.6" height="4.5" rx="0.6" fill="#FFFFFF"/>
   <rect x="33.4" y="30.5" width="2.6" height="8" rx="0.6" fill="#FFFFFF"/>
   <rect x="37.3" y="27" width="2.6" height="11.5" rx="0.6" fill="#E1CB8E"/>
-  <text x="76" y="31" fill="#FFFFFF" font-family="Mulish, Segoe UI, Helvetica, Arial, sans-serif" font-size="24" font-weight="800" letter-spacing="1">DANITA</text>
-  <text x="76" y="49" fill="#DCE0E6" font-family="Mulish, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" letter-spacing="0.6">DASHBOARD MONITOR SENTIMEN BERITA</text>
+  <text x="76" y="30" fill="#FFFFFF" font-family="Mulish, Segoe UI, Helvetica, Arial, sans-serif" font-size="24" font-weight="800" letter-spacing="1.2">DANITA</text>
+  <text x="76" y="48" fill="#DCE0E6" font-family="Mulish, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" letter-spacing="0.7">DASHBOARD MONITOR SENTIMEN BERITA</text>
 </svg>
