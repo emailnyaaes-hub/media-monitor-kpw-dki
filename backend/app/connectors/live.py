@@ -339,8 +339,6 @@ def _google_query(
     deadline: float | None = None,
     when: str = "14d",
 ) -> tuple[list[RawItem], int]:
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
     address = (
         "https://news.google.com/rss/search?q="
         + quote(f"{_exclude_owned_sites(query)} when:{when}")
@@ -355,10 +353,29 @@ def _google_query(
         return [], 0
     kept: list[RawItem] = []
     failed = 0
-    # Jangan pakai `with` pool: __exit__ menunggu semua future dan menggantung Vercel
-    # meski deadline sudah lewat.
+    fast = os.environ.get("BI_FAST_INGEST") == "1" or bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"))
+    # Di produksi: decode berurutan (tanpa thread pool) agar mudah dipotong oleh deadline.
+    if fast or limit <= 5:
+        for item in raw_items:
+            if deadline is not None and time.monotonic() > deadline:
+                break
+            if len(kept) >= limit:
+                break
+            try:
+                decoded = _decode_google_item(item)
+            except Exception:
+                failed += 1
+                continue
+            if decoded is None:
+                failed += 1
+                continue
+            kept.append(decoded)
+        return kept, failed
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     from concurrent.futures import TimeoutError as FuturesTimeout
 
+    # Jangan pakai `with` pool: __exit__ menunggu semua future dan menggantung Vercel.
     pool = ThreadPoolExecutor(max_workers=4)
     try:
         futures = {pool.submit(_decode_google_item, item): item for item in raw_items}

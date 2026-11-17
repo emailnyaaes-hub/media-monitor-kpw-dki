@@ -34,7 +34,7 @@ CITIES = [
 
 
 def ingest_lite(db: Session) -> dict:
-    """Jalur produksi paling pendek: stempel + 1–2 sumber, wajib kembali <~25 detik."""
+    """Jalur produksi paling pendek: sync murni, tanpa thread/process (aman di Vercel)."""
     import time
 
     from sqlalchemy import text
@@ -53,78 +53,52 @@ def ingest_lite(db: Session) -> dict:
         if not IS_SQLITE:
             try:
                 db.execute(text("SET LOCAL lock_timeout = '2000'"))
-                db.execute(text("SET LOCAL statement_timeout = '12000'"))
+                db.execute(text("SET LOCAL statement_timeout = '20000'"))
             except Exception:
                 db.rollback()
         db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
         db.commit()
-
-        # Proses anak bisa di-kill; thread timeout di Vercel sering tidak memotong socket hang.
-        import multiprocessing as mp
 
         keywords = db.query(Keyword).all()
         queries = db.query(SavedQuery).all()
         rules = load_rules(db)
         db.commit()
 
-        def _child_fetch(queue: mp.Queue) -> None:
-            try:
-                end = time.monotonic() + 14
-                batch = []
-                try:
-                    batch.append(fetch_pemprov_portal(deadline=min(end, time.monotonic() + 7)))
-                except Exception as exc:
-                    log.warning("lite pemprov: %s", exc)
-                if time.monotonic() < end:
-                    try:
-                        batch.append(fetch_google_kpw_dki(min(end, time.monotonic() + 7)))
-                    except Exception as exc:
-                        log.warning("lite kpw_dki: %s", exc)
-                queue.put(batch)
-            except Exception as exc:
-                queue.put(exc)
-
-        fetched: list = []
-        queue: mp.Queue = mp.Queue()
-        proc = mp.Process(target=_child_fetch, args=(queue,), daemon=True)
-        proc.start()
-        proc.join(timeout=16)
-        if proc.is_alive():
-            proc.terminate()
-            proc.join(timeout=2)
-            summaries.append({"name": "fetch", "status": "gagal", "found": 0, "added": 0, "message": "Proses fetch dipotong 16s"})
-        elif not queue.empty():
-            payload = queue.get()
-            if isinstance(payload, Exception):
-                log.exception("lite fetch gagal: %s", payload)
-            else:
-                fetched = list(payload or [])
-        else:
-            summaries.append({"name": "fetch", "status": "gagal", "found": 0, "added": 0, "message": "Fetch tanpa hasil"})
-
-        for report in fetched:
-            report.items = list(report.items or [])[:6]
-            try:
-                result = _store_report(db, report, keywords, queries, rules, started)
-            except Exception as exc:
-                log.exception("lite store gagal: %s", exc)
-                db.rollback()
-                summaries.append({"name": getattr(report, "name", "?"), "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
+        # Sync singkat saja — jangan thread/process (sering deadlock dengan SQLAlchemy di serverless).
+        deadline = time.monotonic() + 12
+        for label, runner in (
+            ("pemprov", lambda: fetch_pemprov_portal(deadline=min(deadline, time.monotonic() + 5))),
+            ("kpw_dki", lambda: fetch_google_kpw_dki(min(deadline, time.monotonic() + 5))),
+        ):
+            if time.monotonic() >= deadline:
+                summaries.append({"name": label, "status": "gagal", "found": 0, "added": 0, "message": "Skip: batas waktu"})
                 continue
-            added += result["added"]
-            skipped += result["skipped"]
-            rejected += result["rejected"]
-            invalid += result["invalid_url"]
-            summaries.append(result["summary"])
+            try:
+                report = runner()
+                report.items = list(report.items or [])[:5]
+                result = _store_report(db, report, keywords, queries, rules, started)
+                added += result["added"]
+                skipped += result["skipped"]
+                rejected += result["rejected"]
+                invalid += result["invalid_url"]
+                summaries.append(result["summary"])
+            except Exception as exc:
+                log.exception("lite %s gagal: %s", label, exc)
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                summaries.append({"name": label, "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
+            db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
+            db.commit()
 
-        db.merge(AppMeta(key="last_ingest_at", value=now_wib().isoformat(timespec="minutes")))
         if added:
             db.merge(AppMeta(key="data_mode", value="live"))
-        db.commit()
+            db.commit()
         return {
             "status": "selesai",
             "mode": "cepat",
-            "path": "lite-alarm",
+            "path": "lite-sync",
             "added": added,
             "skipped": skipped,
             "rejected": rejected,

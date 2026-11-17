@@ -43,7 +43,11 @@ def parse_date(value: str | None) -> datetime | None:
 
 
 def read_rss(url: str, source_name: str, source_tier: int) -> list[RawItem]:
-    payload = fetch_bytes(url, timeout=10, attempts=1)
+    import os
+
+    # Produksi: timeout ketat agar ingest lite tidak digantung RSS Google.
+    timeout = 5 if (os.environ.get("BI_FAST_INGEST") == "1" or os.environ.get("VERCEL")) else 10
+    payload = fetch_bytes(url, timeout=timeout, attempts=1)
     root = ElementTree.fromstring(payload)
     items: list[RawItem] = []
     for node in root.findall(".//item"):

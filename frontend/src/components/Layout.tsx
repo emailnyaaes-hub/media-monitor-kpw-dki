@@ -329,12 +329,14 @@ function RefreshBar() {
 
   async function runIngest(reason: 'manual' | 'auto') {
     setBusy(true)
-    setNote(reason === 'auto' ? 'Data lebih dari 2 jam — memperbarui otomatis…' : 'Mengambil sumber… bisa 30–60 detik.')
+    setNote(reason === 'auto' ? 'Data lebih dari 2 jam — memperbarui otomatis…' : 'Mengambil sumber… biasanya di bawah 30 detik.')
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => controller.abort(), 35000)
     try {
       // Jangan retag dulu — retag seluruh arsip sering timeout di Vercel sebelum ingest jalan.
       const result = await api<{ status: string; added?: number; skipped?: number; message?: string }>(
         '/api/jobs/ingest?mode=cepat&wait=true&force=true',
-        { method: 'POST' },
+        { method: 'POST', signal: controller.signal },
       )
       if (result.status === 'sedang_berjalan') {
         setNote('Pengambilan lain masih berjalan. Tunggu sebentar lalu coba lagi.')
@@ -344,19 +346,22 @@ function RefreshBar() {
         setNote(result.message || 'Pengambilan gagal. Coba lagi.')
         return
       }
+      localStorage.setItem('bi-last-ingest-attempt', String(Date.now()))
       const added = result.added ?? 0
       setNote(added > 0 ? `Selesai: ${added} berita baru. Memuat ulang…` : 'Selesai: belum ada berita baru dari sumber. Memuat ulang…')
       window.setTimeout(() => window.location.reload(), 900)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Pengambilan gagal.'
+      localStorage.setItem('bi-last-ingest-attempt', String(Date.now()))
       // Vercel sering 504 meski sumber sudah sempat tersimpan — muat ulang setelah jeda.
-      if (/504|502|waktu|timeout|kehabisan waktu/i.test(message)) {
-        setNote('Server masih mengambil sumber (batas waktu Vercel). Memuat ulang sebentar…')
-        window.setTimeout(() => window.location.reload(), 8000)
+      if (/504|502|waktu|timeout|abort|kehabisan waktu/i.test(message)) {
+        setNote('Pengambilan mencapai batas waktu. Memuat ulang untuk cek berita terbaru…')
+        window.setTimeout(() => window.location.reload(), 5000)
         return
       }
       setNote(message)
     } finally {
+      window.clearTimeout(timer)
       setBusy(false)
     }
   }
@@ -367,12 +372,20 @@ function RefreshBar() {
     let cancel = false
     ;(async () => {
       try {
+        const lastAttempt = Number(localStorage.getItem('bi-last-ingest-attempt') || 0)
+        // Cegah spam auto-refresh (sering bikin antrian hang di Vercel).
+        if (Date.now() - lastAttempt < 90 * 60 * 1000) {
+          const status = await api<{ last_updated?: string | null }>('/api/ingest/status')
+          if (!cancel) setLastUpdated(status.last_updated || null)
+          return
+        }
         const status = await api<{ needs_refresh?: boolean; last_updated?: string | null; running?: boolean }>(
           '/api/ingest/status',
         )
         if (cancel) return
         setLastUpdated(status.last_updated || null)
         if (status.needs_refresh && !status.running) {
+          localStorage.setItem('bi-last-ingest-attempt', String(Date.now()))
           await runIngest('auto')
         }
       } catch {

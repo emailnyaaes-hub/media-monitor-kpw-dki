@@ -16,7 +16,10 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   let response: Response
   try {
     response = await fetch(path, { ...options, headers })
-  } catch {
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new ApiError(0, 'Permintaan dibatalkan karena timeout.')
+    }
     throw new ApiError(0, 'API tidak terjangkau. Jalankan backend pada port 8000.')
   }
   if (response.status === 401 && !path.includes('/auth/login')) {
