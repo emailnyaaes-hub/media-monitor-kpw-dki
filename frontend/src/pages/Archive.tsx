@@ -53,6 +53,11 @@ export default function ArchivePage() {
   const list = days.data?.days || []
   const active = list.find((item) => item.date === selected) || null
 
+  useEffect(() => {
+    if (!list.length) return
+    if (!list.some((item) => item.date === selected)) setSelected(list[0].date)
+  }, [list, selected])
+
   function pick(day: string) {
     setSelected(day)
   }
@@ -164,7 +169,9 @@ export default function ArchivePage() {
         </div>
       </div>
 
-      <MentionDrawer mentionId={openId} onClose={() => setOpenId(null)} />
+      {openId != null && (
+        <MentionDrawer id={openId} onClose={() => setOpenId(null)} onSaved={() => dayPayload.reload()} />
+      )}
     </div>
   )
 }
