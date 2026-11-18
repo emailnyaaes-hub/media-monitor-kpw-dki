@@ -127,6 +127,11 @@ export interface AlertItem {
   triggered_at: string
   is_read: boolean
   issue_id: number | null
+  rule_type?: string
+  rule_label?: string
+  why?: string
+  action?: string
+  owner?: string
 }
 
 export interface TrendPoint {

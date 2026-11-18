@@ -164,6 +164,14 @@ def ingest_lite(db: Session) -> dict:
         finally:
             socket.setdefaulttimeout(old_timeout)
 
+        alerts_n = 0
+        try:
+            from app.services.alerts import evaluate_rules
+
+            alerts_n = evaluate_rules(db)
+        except Exception:
+            log.exception("evaluasi EWS setelah ingest_lite gagal")
+
         return {
             "status": "selesai",
             "mode": "cepat",
@@ -172,7 +180,7 @@ def ingest_lite(db: Session) -> dict:
             "skipped": skipped,
             "rejected": rejected,
             "invalid_url": invalid,
-            "alerts": 0,
+            "alerts": alerts_n,
             "issues": 0,
             "connectors": summaries,
             "elapsed_ms": int((time.monotonic() - t0) * 1000),

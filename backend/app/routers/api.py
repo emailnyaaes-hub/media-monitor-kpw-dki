@@ -776,18 +776,43 @@ def delete_query(query_id: int, db: Session = Depends(get_db), user: CurrentUser
     return {"ok": True}
 
 
+ALLOWED_RULE_TYPES = {
+    "negative_growth",
+    "keyword_count",
+    "tier1_downside",
+    "kpw_negative",
+    "volume_spike",
+    "hoax_spread",
+    "narrative_growth",
+    "complaint_growth",
+    "high_risk",
+    "social_amplify",
+    "currency_stress",
+    "quote_pressure",
+    "unverified_burst",
+    "cross_channel",
+}
+
+
 @router.get("/alerts")
 def get_alerts(db: Session = Depends(get_db), _: CurrentUser = Depends(get_current_user)):
+    from app.services.alerts import RULE_META, enrich_alert, ensure_ews_rules, ews_board
+
+    ensure_ews_rules(db)
     rows = db.query(Alert).order_by(Alert.triggered_at.desc()).limit(50).all()
     rules = db.query(AlertRule).order_by(AlertRule.id).all()
+    rule_by_id = {row.id: row for row in rules}
     return {
-        "items": [alert_out(row) for row in rows],
+        "items": [enrich_alert(row, rule_by_id.get(row.rule_id) if row.rule_id else None) for row in rows],
         "unread": sum(1 for row in rows if not row.is_read),
+        "ews": ews_board(db, rows, rules),
         "rules": [
             {
                 "id": row.id,
                 "name": row.name,
                 "rule_type": row.rule_type,
+                "rule_label": RULE_META.get(row.rule_type, {}).get("label") or row.rule_type,
+                "why": RULE_META.get(row.rule_type, {}).get("why") or "",
                 "threshold": row.threshold,
                 "window_hours": row.window_hours,
                 "severity": row.severity,
@@ -797,7 +822,7 @@ def get_alerts(db: Session = Depends(get_db), _: CurrentUser = Depends(get_curre
             }
             for row in rules
         ],
-        "channel_note": "Email, WhatsApp, dan Telegram disiapkan pada model data, tetapi pengirimannya belum diaktifkan.",
+        "channel_note": "EWS memantau berita dan sosial di dashboard. Email/WhatsApp/Telegram belum diaktifkan.",
     }
 
 
@@ -815,7 +840,7 @@ def read_alert(alert_id: int, db: Session = Depends(get_db), _: CurrentUser = De
 def add_rule(body: RuleBody, db: Session = Depends(get_db), user: CurrentUser = Depends(require_admin)):
     if body.severity not in SEVERITIES:
         raise HTTPException(status_code=400, detail="Tingkat keparahan tidak dikenali")
-    if body.rule_type not in {"negative_growth", "keyword_count", "tier1_downside", "kpw_negative", "volume_spike", "hoax_spread", "narrative_growth", "complaint_growth"}:
+    if body.rule_type not in ALLOWED_RULE_TYPES:
         raise HTTPException(status_code=400, detail="Jenis aturan tidak dikenali")
     row = AlertRule(**body.model_dump())
     db.add(row)
