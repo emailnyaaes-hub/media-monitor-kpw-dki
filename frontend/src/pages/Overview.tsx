@@ -11,10 +11,10 @@ import { formatNumber, formatPct, isoDate, PLATFORM_LABEL, relativeTime } from '
 import type { MentionCard, Overview, TrendPoint } from '../types'
 
 const RUBRIK = [
-  { id: 'bi_nasional', label: 'Berita Nasional', hint: 'Bank Indonesia, moneter, rupiah, inflasi, keuangan daerah, QRIS, dan mandat BI.' },
-  { id: 'kpw_dki', label: 'KPwBI DKI Jakarta', hint: 'KPw BI DKI Jakarta, program lokal, dan berita BI/Jakarta terkait (arsip hingga 1 tahun).' },
-  { id: 'kpw_provinsi', label: 'KPwBI', hint: 'Kantor Perwakilan BI di luar DKI — Jawa, Sumatera, Bali, Sulawesi, dan lainnya (arsip hingga 1 tahun).' },
-  { id: 'pemprov_dki', label: 'Pemprov DKI Jakarta', hint: 'Pemprov DKI, Balai Kota, Diskominfo, Smart City, dan pejabat daerah (arsip hingga 1 tahun).' },
+  { id: 'bi_nasional', label: 'Berita Nasional' },
+  { id: 'kpw_dki', label: 'KPwBI DKI Jakarta' },
+  { id: 'kpw_provinsi', label: 'KPwBI' },
+  { id: 'pemprov_dki', label: 'Pemprov DKI Jakarta' },
 ] as const
 
 export default function OverviewPage() {
@@ -42,7 +42,6 @@ export default function OverviewPage() {
   const side = stories.slice(1, 5)
   const trend = grain === 'day' ? data?.trend || [] : extra.data?.items || []
   const aktif = rubrik
-  const rubrikMeta = RUBRIK.find((item) => item.id === rubrik) ?? RUBRIK[0]
 
   function openAll() {
     navigate(`/explorer?feed_section=${encodeURIComponent(rubrik)}`)
@@ -50,7 +49,7 @@ export default function OverviewPage() {
 
   return (
     <div className="mx-auto max-w-6xl pb-16 md:pb-0">
-      <nav className="mb-3 flex gap-1 overflow-x-auto border-b border-ink" aria-label="Kanal rubrik">
+      <nav className="mb-5 flex gap-1 overflow-x-auto border-b border-ink" aria-label="Kanal rubrik">
         {RUBRIK.map((item) => {
           const on = aktif === item.id
           return (
@@ -65,7 +64,6 @@ export default function OverviewPage() {
           )
         })}
       </nav>
-      <p className="reveal mb-5 max-w-3xl text-sm text-muted">{rubrikMeta.hint}</p>
 
       {data && (
         <p className="reveal reveal-delay-1 mb-5 text-sm">
