@@ -34,11 +34,11 @@ CITIES = [
 
 
 def ingest_lite(db: Session) -> dict:
-    """Jalur produksi: RSS media utama (7 hari) + Google BI singkat, respons <~20 detik."""
+    """Jalur produksi: RSS + Google BI + sosial singkat (X/IG/FB/Threads), respons <~30 detik."""
     import socket
     import time
 
-    from app.connectors.live import DIRECT_FEEDS, fetch_direct, fetch_google_kpw_dki, fetch_pemprov_portal
+    from app.connectors.live import DIRECT_FEEDS, fetch_direct, fetch_google_kpw_dki, fetch_pemprov_portal, fetch_social_lite
     from app.database import SessionLocal
     from app.services.blocklist import load_rules
 
@@ -125,6 +125,34 @@ def ingest_lite(db: Session) -> dict:
                     )
                 except Exception as exc:
                     log.exception("lite google BI gagal: %s", exc)
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+
+            # Media sosial (X, Instagram, Facebook, Threads) — kuota singkat di jalur produksi.
+            if time.monotonic() - t0 < 24:
+                try:
+                    for report in fetch_social_lite(deadline=t0 + 28):
+                        try:
+                            _consume(report)
+                        except Exception as exc:
+                            log.exception("lite sosial %s gagal: %s", getattr(report, "name", "?"), exc)
+                            try:
+                                db.rollback()
+                            except Exception:
+                                pass
+                            summaries.append(
+                                {
+                                    "name": getattr(report, "name", "sosial"),
+                                    "status": "gagal",
+                                    "found": 0,
+                                    "added": 0,
+                                    "message": str(exc)[:200],
+                                }
+                            )
+                except Exception as exc:
+                    log.exception("lite sosial gagal: %s", exc)
                     try:
                         db.rollback()
                     except Exception:

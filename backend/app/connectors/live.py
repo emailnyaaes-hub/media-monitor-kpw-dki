@@ -776,21 +776,21 @@ def _youtube_api(key: str, since: datetime) -> tuple[list[RawItem], str]:
 
 
 def unavailable_social() -> list[FetchReport]:
-    return [
-        FetchReport(
-            "Threads API",
-            "tidak_tersedia",
-            "Sumber tidak tersedia. Threads tidak punya feed publik. Butuh aplikasi Meta yang disetujui.",
-        )
-    ]
+    # Threads sudah dicoba lewat pencarian publik (site:threads.net) di fetch_social / fetch_social_lite.
+    return []
 
 
 SOCIAL_QUERIES = [
-    ("Instagram", "instagram", ("instagram.com",), '"Bank Indonesia" site:instagram.com'),
-    ("TikTok", "tiktok", ("tiktok.com",), '"Bank Indonesia" site:tiktok.com'),
-    ("X", "x", ("x.com", "twitter.com"), '"Bank Indonesia" (site:x.com OR site:twitter.com)'),
-    ("Facebook", "facebook", ("facebook.com",), '"Bank Indonesia" site:facebook.com'),
+    ("X", "x", ("x.com", "twitter.com"), '("Bank Indonesia" OR BI-Rate OR QRIS OR "BI Fast") (site:x.com OR site:twitter.com)'),
+    ("Instagram", "instagram", ("instagram.com",), '("Bank Indonesia" OR QRIS OR SobatRupiah) site:instagram.com'),
+    ("Facebook", "facebook", ("facebook.com",), '("Bank Indonesia" OR QRIS OR "BI-Rate") site:facebook.com'),
+    ("Threads", "threads", ("threads.net",), '("Bank Indonesia" OR QRIS OR "BI-Rate") site:threads.net'),
+    ("TikTok", "tiktok", ("tiktok.com",), '("Bank Indonesia" OR QRIS) site:tiktok.com'),
 ]
+
+# Jalur produksi (Vercel): prioritas platform + kuota kecil agar tetap < batas waktu.
+SOCIAL_LITE_QUERIES = SOCIAL_QUERIES[:4]  # X, Instagram, Facebook, Threads
+
 
 def fetch_social(since: datetime, deadline: float | None = None) -> list[FetchReport]:
     wide = min(since, now_wib() - timedelta(days=14))
@@ -798,13 +798,35 @@ def fetch_social(since: datetime, deadline: float | None = None) -> list[FetchRe
     for name, platform, hosts, query in SOCIAL_QUERIES:
         if deadline is not None and time.monotonic() > deadline:
             break
-        reports.append(_fetch_social_one(name, platform, hosts, query, wide, deadline=deadline))
+        reports.append(_fetch_social_one(name, platform, hosts, query, wide, limit=3, deadline=deadline))
     return reports
 
 
-def _fetch_social_one(name: str, platform: str, hosts: tuple[str, ...], query: str, since: datetime, deadline: float | None = None) -> FetchReport:
+def fetch_social_lite(deadline: float | None = None) -> list[FetchReport]:
+    """Ambil unggahan sosial singkat untuk ingest produksi (tanpa API berbayar)."""
+    since = now_wib() - timedelta(days=7)
+    reports: list[FetchReport] = []
+    for name, platform, hosts, query in SOCIAL_LITE_QUERIES:
+        if deadline is not None and time.monotonic() > deadline:
+            break
+        reports.append(
+            _fetch_social_one(name, platform, hosts, query, since, limit=2, deadline=deadline, when="7d")
+        )
+    return reports
+
+
+def _fetch_social_one(
+    name: str,
+    platform: str,
+    hosts: tuple[str, ...],
+    query: str,
+    since: datetime,
+    limit: int = 3,
+    deadline: float | None = None,
+    when: str = "14d",
+) -> FetchReport:
     try:
-        items, failed = _social_query(query, since, platform, hosts, name, limit=3, deadline=deadline)
+        items, failed = _social_query(query, since, platform, hosts, name, limit=limit, deadline=deadline, when=when)
     except Exception as exc:
         return FetchReport(name, "gagal", f"Sumber tidak tersedia. Pencarian {name} gagal: {exc.__class__.__name__}: {exc}")
     if not items and failed:
@@ -817,10 +839,19 @@ def _fetch_social_one(name: str, platform: str, hosts: tuple[str, ...], query: s
     return FetchReport(name, "berhasil", f"{len(items)} unggahan {name} dengan tautan asli.{note}", items)
 
 
-def _social_query(query: str, since: datetime, platform: str, hosts: tuple[str, ...], label: str, limit: int, deadline: float | None = None) -> tuple[list[RawItem], int]:
+def _social_query(
+    query: str,
+    since: datetime,
+    platform: str,
+    hosts: tuple[str, ...],
+    label: str,
+    limit: int,
+    deadline: float | None = None,
+    when: str = "14d",
+) -> tuple[list[RawItem], int]:
     address = (
         "https://news.google.com/rss/search?q="
-        + quote(f"{_exclude_owned_sites(query)} when:14d")
+        + quote(f"{_exclude_owned_sites(query)} when:{when}")
         + "&hl=id&gl=ID&ceid=ID:id"
     )
     raw_items = read_rss(address, platform, 2)
@@ -830,7 +861,10 @@ def _social_query(query: str, since: datetime, platform: str, hosts: tuple[str, 
     for item in raw_items:
         if deadline is not None and time.monotonic() > deadline:
             break
-        if item.published_at < since or not _social_relevant(item):
+        if item.published_at < since:
+            continue
+        # Permalink di host sosial sudah cukup; filter kata kunci hanya untuk judul kabur.
+        if not _host_hint(item.url, hosts) and not _social_relevant(item):
             continue
         if len(kept) >= limit or tried >= 6:
             break
@@ -844,7 +878,7 @@ def _social_query(query: str, since: datetime, platform: str, hosts: tuple[str, 
             failed += 1
             continue
         handle = _social_handle(decoded)
-        if platform == "instagram" and not handle:
+        if platform in {"instagram", "threads"} and not handle:
             from app.services.blocklist import lookup_author
 
             handle = lookup_author(decoded)
@@ -862,16 +896,24 @@ def _social_query(query: str, since: datetime, platform: str, hosts: tuple[str, 
     return kept, failed
 
 
+def _host_hint(url: str, hosts: tuple[str, ...]) -> bool:
+    hay = (url or "").casefold()
+    return any(host in hay for host in hosts)
+
+
 def _social_relevant(item: RawItem) -> bool:
     hay = f"{item.title}\n{item.text}".casefold()
     terms = (
         "bank indonesia",
         "bi-rate",
         "bi-fast",
+        "bi fast",
         "qris",
         "kpw",
         "sobatrupiah",
+        "sobat rupiah",
         "suku bunga acuan",
+        "rupiah",
     )
     return any(term in hay for term in terms)
 
@@ -906,6 +948,9 @@ def _social_handle(url: str) -> str:
         return segments[0]
     if "instagram.com" in host and segments[0] not in {"reel", "p", "stories", "tv", "explore"}:
         return "@" + segments[0]
+    if "threads.net" in host and segments[0] not in {"t", "search", "login"}:
+        handle = segments[0].lstrip("@")
+        return "@" + handle if handle else ""
     return ""
 
 

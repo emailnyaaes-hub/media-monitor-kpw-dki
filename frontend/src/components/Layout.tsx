@@ -348,7 +348,7 @@ function RefreshBar() {
       }
       localStorage.setItem('bi-last-ingest-attempt', String(Date.now()))
       const added = result.added ?? 0
-      setNote(added > 0 ? `Selesai: ${added} berita baru. Memuat ulang…` : 'Selesai: belum ada berita baru dari sumber. Memuat ulang…')
+      setNote(added > 0 ? `Selesai: ${added} konten baru (berita/sosial). Memuat ulang…` : 'Selesai: belum ada konten baru dari sumber. Memuat ulang…')
       window.setTimeout(() => window.location.reload(), 900)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Pengambilan gagal.'
