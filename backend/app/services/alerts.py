@@ -201,8 +201,18 @@ def ews_board(db: Session, alerts: list[Alert] | None = None, rules: list[AlertR
         summary = "Tidak ada alert belum dibaca. Tetap jalankan siklus pantauan rutin."
 
     rule_by_id = {row.id: row for row in rules}
+    # Prioritaskan sinyal aturan EWS; ping "Saran diperbarui" dari DSS jangan mendominasi papan.
+    ranked = sorted(
+        unread,
+        key=lambda row: (
+            0 if row.rule_id and rule_by_id.get(row.rule_id) else 1,
+            0 if row.severity == "kritis" else 1 if row.severity == "waspada" else 2,
+            0 if not (row.title or "").startswith("Saran diperbarui") else 1,
+            -(row.triggered_at.timestamp() if row.triggered_at else 0),
+        ),
+    )
     focus = []
-    for row in unread[:5]:
+    for row in ranked[:5]:
         rule = rule_by_id.get(row.rule_id) if row.rule_id else None
         focus.append(
             {
