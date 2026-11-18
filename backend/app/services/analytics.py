@@ -553,6 +553,60 @@ def category_breakdown(db: Session, window: dict) -> list[dict]:
     return output
 
 
+SOCIAL_PLATFORMS = {"x", "instagram", "facebook", "threads", "tiktok", "youtube"}
+
+
+def archive_days(db: Session, window: dict) -> dict:
+    """Ringkas arsip harian: tanggal → jumlah berita/sosial untuk dibaca ulang."""
+    rows = base_query(db, window).order_by(Mention.published_at.desc()).all()
+    buckets: dict[str, dict] = {}
+    for row in rows:
+        day = row.published_at.date().isoformat()
+        bucket = buckets.get(day)
+        if bucket is None:
+            bucket = {
+                "date": day,
+                "total": 0,
+                "berita": 0,
+                "sosial": 0,
+                "negatif": 0,
+                "positif": 0,
+                "titles": [],
+            }
+            buckets[day] = bucket
+        bucket["total"] += 1
+        platform = (row.platform or "berita").casefold()
+        if platform in SOCIAL_PLATFORMS:
+            bucket["sosial"] += 1
+        else:
+            bucket["berita"] += 1
+        if row.sentiment == "negatif":
+            bucket["negatif"] += 1
+        elif row.sentiment == "positif":
+            bucket["positif"] += 1
+        if len(bucket["titles"]) < 3 and row.title:
+            bucket["titles"].append(row.title[:140])
+    days = sorted(buckets.values(), key=lambda item: item["date"], reverse=True)
+    return {
+        "date_from": window["date_from"].isoformat(),
+        "date_to": window["date_to"].isoformat(),
+        "day_count": len(days),
+        "mention_total": sum(item["total"] for item in days),
+        "days": days,
+    }
+
+
+def archive_day(db: Session, day: date, platform: str | None = None, category: str | None = None) -> dict:
+    """Isi arsip satu hari — semua konten pada tanggal itu, siap dibaca ulang."""
+    window = parse_window(day, day, platform, category, None)
+    rows = base_query(db, window).order_by(Mention.published_at.desc()).all()
+    return {
+        "date": day.isoformat(),
+        "total": len(rows),
+        "items": [mention_card(row) for row in rows],
+    }
+
+
 def search_mentions(db: Session, window: dict, params: dict) -> dict:
     from app.services.news_sections import classify_feed_section, select_for_feed_section
 

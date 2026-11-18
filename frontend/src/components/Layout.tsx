@@ -16,6 +16,7 @@ const NAV = [
   { to: '/review', label: 'Review Konten' },
   { to: '/saran', label: 'Rekomendasi' },
   { to: '/explorer', label: 'Jelajah Berita' },
+  { to: '/arsip', label: 'Arsip' },
 ]
 
 const MOBILE_NAV = [

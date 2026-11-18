@@ -3,6 +3,7 @@ import { useAuth } from './auth'
 import Layout from './components/Layout'
 import AdvicePage from './pages/Advice'
 import AlertsPage from './pages/Alerts'
+import ArchivePage from './pages/Archive'
 import ExplorerPage from './pages/Explorer'
 import IssueDetailPage from './pages/IssueDetail'
 import KeywordsPage from './pages/Keywords'
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="/isu/:id" element={<IssueDetailPage />} />
         <Route path="/sumber" element={<SourcesPage />} />
         <Route path="/explorer" element={<ExplorerPage />} />
+        <Route path="/arsip" element={<ArchivePage />} />
         <Route path="/alert" element={<AlertsPage />} />
         <Route path="/laporan" element={<Navigate to="/" replace />} />
         <Route path="/kata-kunci" element={<KeywordsPage />} />

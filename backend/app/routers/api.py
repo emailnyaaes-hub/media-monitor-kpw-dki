@@ -262,6 +262,32 @@ def post_chart_insight(
     return generate(db, _window(date_from, date_to, platform, category, location), chart, granularity, topic, segment, area)
 
 
+@router.get("/archive/days")
+def get_archive_days(
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    platform: Optional[str] = None,
+    category: Optional[str] = None,
+    location: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(get_current_user),
+):
+    """Kalender arsip: daftar hari berisi berapa berita/sosial tersimpan."""
+    return analytics.archive_days(db, _window(date_from, date_to, platform, category, location))
+
+
+@router.get("/archive/day")
+def get_archive_day(
+    day: date,
+    platform: Optional[str] = None,
+    category: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(get_current_user),
+):
+    """Isi arsip satu tanggal — dibaca ulang di kemudian hari."""
+    return analytics.archive_day(db, day, platform, category)
+
+
 @router.get("/mentions")
 def get_mentions(
     date_from: Optional[date] = None,

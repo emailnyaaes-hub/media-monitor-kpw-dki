@@ -8,6 +8,7 @@ const ACTIONS = [
   { id: 'review', label: 'Buka Review Konten', hint: 'Koreksi label', path: '/review' },
   { id: 'saran', label: 'Buka Rekomendasi', hint: 'Tindak lanjut', path: '/saran' },
   { id: 'explorer', label: 'Buka Jelajah Berita', hint: 'Cari semua berita', path: '/explorer' },
+  { id: 'arsip', label: 'Buka Arsip Historis', hint: 'Baca ulang per tanggal', path: '/arsip' },
   { id: 'alert', label: 'Buka EWS', hint: 'Early Warning System', path: '/alert' },
   { id: 'settings', label: 'Buka Pengaturan', hint: 'Akun & sistem', path: '/pengaturan' },
 ]
