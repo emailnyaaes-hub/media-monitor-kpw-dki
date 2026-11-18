@@ -78,8 +78,35 @@ def ingest_lite(db: Session) -> dict:
         old_timeout = socket.getdefaulttimeout()
         socket.setdefaulttimeout(2)
         try:
+            # Sosial dulu (X/IG/FB/Threads) agar sempat masuk sebelum batas waktu Vercel.
+            try:
+                for report in fetch_social_lite(deadline=t0 + 10):
+                    try:
+                        _consume(report)
+                    except Exception as exc:
+                        log.exception("lite sosial %s gagal: %s", getattr(report, "name", "?"), exc)
+                        try:
+                            db.rollback()
+                        except Exception:
+                            pass
+                        summaries.append(
+                            {
+                                "name": getattr(report, "name", "sosial"),
+                                "status": "gagal",
+                                "found": 0,
+                                "added": 0,
+                                "message": str(exc)[:200],
+                            }
+                        )
+            except Exception as exc:
+                log.exception("lite sosial gagal: %s", exc)
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+
             for name, tier, url in DIRECT_FEEDS:
-                if time.monotonic() - t0 > 12:
+                if time.monotonic() - t0 > 18:
                     break
                 try:
                     _consume(fetch_direct(name, tier, url, since))
@@ -92,29 +119,29 @@ def ingest_lite(db: Session) -> dict:
                     summaries.append({"name": name, "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
 
             # Google singkat untuk BI/Pemprov agar rubrik Ringkasan terisi berita baru.
-            if time.monotonic() - t0 < 16:
+            if time.monotonic() - t0 < 22:
                 try:
-                    _consume(fetch_pemprov_portal(deadline=t0 + 18))
+                    _consume(fetch_pemprov_portal(deadline=t0 + 24))
                 except Exception as exc:
                     log.exception("lite pemprov gagal: %s", exc)
                     try:
                         db.rollback()
                     except Exception:
                         pass
-            if time.monotonic() - t0 < 18:
+            if time.monotonic() - t0 < 24:
                 try:
-                    _consume(fetch_google_kpw_dki(t0 + 20))
+                    _consume(fetch_google_kpw_dki(t0 + 26))
                 except Exception as exc:
                     log.exception("lite kpw_dki gagal: %s", exc)
                     try:
                         db.rollback()
                     except Exception:
                         pass
-            if time.monotonic() - t0 < 20:
+            if time.monotonic() - t0 < 26:
                 try:
                     from app.connectors.live import FetchReport, _google_query
 
-                    batch, failed = _google_query('"Bank Indonesia" OR BI-Rate OR rupiah', since, limit=3, deadline=t0 + 22, when="7d")
+                    batch, failed = _google_query('"Bank Indonesia" OR BI-Rate OR rupiah', since, limit=2, deadline=t0 + 28, when="7d")
                     _consume(
                         FetchReport(
                             "Google News BI",
@@ -125,34 +152,6 @@ def ingest_lite(db: Session) -> dict:
                     )
                 except Exception as exc:
                     log.exception("lite google BI gagal: %s", exc)
-                    try:
-                        db.rollback()
-                    except Exception:
-                        pass
-
-            # Media sosial (X, Instagram, Facebook, Threads) — kuota singkat di jalur produksi.
-            if time.monotonic() - t0 < 24:
-                try:
-                    for report in fetch_social_lite(deadline=t0 + 28):
-                        try:
-                            _consume(report)
-                        except Exception as exc:
-                            log.exception("lite sosial %s gagal: %s", getattr(report, "name", "?"), exc)
-                            try:
-                                db.rollback()
-                            except Exception:
-                                pass
-                            summaries.append(
-                                {
-                                    "name": getattr(report, "name", "sosial"),
-                                    "status": "gagal",
-                                    "found": 0,
-                                    "added": 0,
-                                    "message": str(exc)[:200],
-                                }
-                            )
-                except Exception as exc:
-                    log.exception("lite sosial gagal: %s", exc)
                     try:
                         db.rollback()
                     except Exception:

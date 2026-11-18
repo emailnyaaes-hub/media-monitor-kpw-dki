@@ -810,7 +810,7 @@ def fetch_social_lite(deadline: float | None = None) -> list[FetchReport]:
         if deadline is not None and time.monotonic() > deadline:
             break
         reports.append(
-            _fetch_social_one(name, platform, hosts, query, since, limit=2, deadline=deadline, when="7d")
+            _fetch_social_one(name, platform, hosts, query, since, limit=1, deadline=deadline, when="7d")
         )
     return reports
 
