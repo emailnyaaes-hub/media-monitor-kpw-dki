@@ -373,22 +373,17 @@ function RefreshBar() {
     let cancel = false
     ;(async () => {
       try {
-        const lastAttempt = Number(localStorage.getItem('bi-last-ingest-attempt') || 0)
-        // Cegah spam auto-refresh (sering bikin antrian hang di Vercel).
-        if (Date.now() - lastAttempt < 90 * 60 * 1000) {
-          const status = await api<{ last_updated?: string | null }>('/api/ingest/status')
-          if (!cancel) setLastUpdated(status.last_updated || null)
-          return
-        }
         const status = await api<{ needs_refresh?: boolean; last_updated?: string | null; running?: boolean }>(
           '/api/ingest/status',
         )
         if (cancel) return
         setLastUpdated(status.last_updated || null)
-        if (status.needs_refresh && !status.running) {
-          localStorage.setItem('bi-last-ingest-attempt', String(Date.now()))
-          await runIngest('auto')
-        }
+        if (!status.needs_refresh || status.running) return
+        const lastAttempt = Number(localStorage.getItem('bi-last-ingest-attempt') || 0)
+        // Cooldown singkat saja — sebelumnya 90 menit membuat berita tampak "tidak otomatis".
+        if (Date.now() - lastAttempt < 20 * 60 * 1000) return
+        localStorage.setItem('bi-last-ingest-attempt', String(Date.now()))
+        await runIngest('auto')
       } catch {
         /* status opsional */
       }

@@ -503,7 +503,7 @@ def status_payload(db: Session) -> dict:
     last = db.get(AppMeta, "last_ingest_at")
     if os.environ.get("VERCEL") == "1" or os.environ.get("VERCEL_ENV"):
         schedule = (
-            "Vercel 1×/hari (~08.00 WIB) + GitHub Actions tiap 2 jam bila workflow & CRON_SECRET aktif"
+            "Vercel 1×/hari (~08.00 WIB) + GitHub Actions tiap 2 jam (workflow Perbarui data Danita)"
         )
     else:
         schedule = "setiap 2 jam (penjadwal server)"
