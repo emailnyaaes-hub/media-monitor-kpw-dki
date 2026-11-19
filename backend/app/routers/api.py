@@ -1132,11 +1132,14 @@ def cron_ingest(request: Request, db: Session = Depends(get_db)):
         pass
     else:
         raise HTTPException(status_code=401, detail="Cron tidak diizinkan")
+    from fastapi.responses import JSONResponse
+
     from app.services.pipeline import _set_running, ingest_lite, ingest_running
 
     if ingest_running(db):
         _set_running(db, False)
-    return ingest_lite(db)
+    payload = ingest_lite(db)
+    return JSONResponse(content=payload, headers={"Connection": "close", "Cache-Control": "no-store"})
 
 @router.post("/jobs/retag")
 def job_retag(db: Session = Depends(get_db), _: CurrentUser = Depends(require_writer)):

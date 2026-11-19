@@ -75,12 +75,22 @@ def ingest_lite(db: Session) -> dict:
         # Jendela 7 hari — jangan pakai last_ingest-6jam (terlalu sempit, feed sering kosong).
         since = now_wib() - timedelta(days=7)
 
+        # Budget ketat: Vercel Hobby memutus ~60s (sering 504). Selesai lebih awal = HTTP 200.
+        BUDGET_SOCIAL = 8
+        BUDGET_RSS = 16
+        BUDGET_PEMPROV = 20
+        BUDGET_KPW = 24
+        BUDGET_BI = 28
+        BUDGET_HARD = 42
+
         old_timeout = socket.getdefaulttimeout()
         socket.setdefaulttimeout(2)
         try:
             # Sosial dulu (X/IG/FB/Threads) agar sempat masuk sebelum batas waktu Vercel.
             try:
-                for report in fetch_social_lite(deadline=t0 + 10):
+                for report in fetch_social_lite(deadline=t0 + BUDGET_SOCIAL):
+                    if time.monotonic() - t0 > BUDGET_HARD:
+                        break
                     try:
                         _consume(report)
                     except Exception as exc:
@@ -105,8 +115,8 @@ def ingest_lite(db: Session) -> dict:
                 except Exception:
                     pass
 
-            for name, tier, url in DIRECT_FEEDS:
-                if time.monotonic() - t0 > 18:
+            for name, tier, url in DIRECT_FEEDS[:6]:
+                if time.monotonic() - t0 > BUDGET_RSS:
                     break
                 try:
                     _consume(fetch_direct(name, tier, url, since))
@@ -119,29 +129,35 @@ def ingest_lite(db: Session) -> dict:
                     summaries.append({"name": name, "status": "gagal", "found": 0, "added": 0, "message": str(exc)[:200]})
 
             # Google singkat untuk BI/Pemprov agar rubrik Ringkasan terisi berita baru.
-            if time.monotonic() - t0 < 22:
+            if time.monotonic() - t0 < BUDGET_PEMPROV:
                 try:
-                    _consume(fetch_pemprov_portal(deadline=t0 + 24))
+                    _consume(fetch_pemprov_portal(deadline=t0 + BUDGET_PEMPROV + 2))
                 except Exception as exc:
                     log.exception("lite pemprov gagal: %s", exc)
                     try:
                         db.rollback()
                     except Exception:
                         pass
-            if time.monotonic() - t0 < 24:
+            if time.monotonic() - t0 < BUDGET_KPW:
                 try:
-                    _consume(fetch_google_kpw_dki(t0 + 26))
+                    _consume(fetch_google_kpw_dki(t0 + BUDGET_KPW + 2))
                 except Exception as exc:
                     log.exception("lite kpw_dki gagal: %s", exc)
                     try:
                         db.rollback()
                     except Exception:
                         pass
-            if time.monotonic() - t0 < 26:
+            if time.monotonic() - t0 < BUDGET_BI:
                 try:
                     from app.connectors.live import FetchReport, _google_query
 
-                    batch, failed = _google_query('"Bank Indonesia" OR BI-Rate OR rupiah', since, limit=2, deadline=t0 + 28, when="7d")
+                    batch, failed = _google_query(
+                        '"Bank Indonesia" OR BI-Rate OR rupiah',
+                        since,
+                        limit=2,
+                        deadline=t0 + BUDGET_BI + 2,
+                        when="7d",
+                    )
                     _consume(
                         FetchReport(
                             "Google News BI",
@@ -165,12 +181,15 @@ def ingest_lite(db: Session) -> dict:
             socket.setdefaulttimeout(old_timeout)
 
         alerts_n = 0
-        try:
-            from app.services.alerts import evaluate_rules
+        if time.monotonic() - t0 < BUDGET_HARD:
+            try:
+                from app.services.alerts import evaluate_rules
 
-            alerts_n = evaluate_rules(db)
-        except Exception:
-            log.exception("evaluasi EWS setelah ingest_lite gagal")
+                alerts_n = evaluate_rules(db)
+            except Exception:
+                log.exception("evaluasi EWS setelah ingest_lite gagal")
+        else:
+            log.warning("lewati evaluasi EWS: budget waktu habis (%.1fs)", time.monotonic() - t0)
 
         return {
             "status": "selesai",

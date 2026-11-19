@@ -18,8 +18,6 @@ jobs:
           APP_URL: https://media-monitor-kpw-dki.vercel.app
         run: |
           set -euo pipefail
-          # Pakai CRON_SECRET bila ada; jika belum diisi di GitHub Secrets,
-          # fallback User-Agent yang diterima endpoint cron Vercel.
           if [ -n "${CRON_SECRET:-}" ]; then
             AUTH_HEADER=(-H "Authorization: Bearer ${CRON_SECRET}")
             AGENT="danita-github-actions"
@@ -28,11 +26,63 @@ jobs:
             AGENT="vercel-cron"
             echo "Peringatan: CRON_SECRET GitHub belum diisi; memakai User-Agent vercel-cron."
           fi
+
+          before=$(curl -sS -m 25 "${APP_URL}/api/health" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('last_ingest_at') or '')" \
+            || true)
+          echo "last_ingest sebelum: ${before:-"(kosong)"}"
+
+          set +e
           code=$(curl -sS -m 280 -o /tmp/ingest.json -w "%{http_code}" \
             "${AUTH_HEADER[@]}" \
             -H "User-Agent: ${AGENT}" \
             "${APP_URL}/api/cron/ingest")
-          echo "HTTP ${code}"
-          head -c 2000 /tmp/ingest.json || true
+          curl_rc=$?
+          set -e
+          echo "HTTP ${code} (curl_rc=${curl_rc})"
+          head -c 2000 /tmp/ingest.json 2>/dev/null || true
           echo
-          test "$code" = "200"
+
+          if [ "$code" = "200" ]; then
+            echo "Ingest selesai (HTTP 200)."
+            exit 0
+          fi
+
+          # Vercel sering 504/502 meski ingest_lite sudah menulis last_ingest_at di awal.
+          if [ "$code" = "504" ] || [ "$code" = "502" ] || [ "$code" = "000" ]; then
+            echo "Respons gateway timeout — cek apakah data sempat terbarui…"
+            sleep 8
+            after=$(curl -sS -m 25 "${APP_URL}/api/health" \
+              | python3 -c "import sys,json; print(json.load(sys.stdin).get('last_ingest_at') or '')" \
+              || true)
+            echo "last_ingest sesudah: ${after:-"(kosong)"}"
+
+            if [ -n "$after" ] && [ "$after" != "$before" ]; then
+              echo "Data terbarui meski HTTP ${code}. Anggap sukses."
+              exit 0
+            fi
+
+            AFTER="$after" python3 -c '
+          import os, sys
+          from datetime import datetime, timedelta, timezone
+          after = (os.environ.get("AFTER") or "").strip()
+          if not after:
+              print("last_ingest kosong setelah timeout")
+              sys.exit(1)
+          try:
+              ts = datetime.fromisoformat(after)
+          except Exception as exc:
+              print("gagal parse last_ingest:", exc)
+              sys.exit(1)
+          if ts.tzinfo is None:
+              ts = ts.replace(tzinfo=timezone(timedelta(hours=7)))
+          now = datetime.now(timezone(timedelta(hours=7)))
+          delta = abs((now - ts).total_seconds())
+          print(f"delta_seconds={delta:.0f}")
+          sys.exit(0 if delta < 20 * 60 else 1)
+          '
+            exit $?
+          fi
+
+          echo "Ingest gagal dengan HTTP ${code}."
+          exit 1
