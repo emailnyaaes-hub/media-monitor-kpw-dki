@@ -368,10 +368,10 @@ function RefreshBar() {
   }
 
   useEffect(() => {
-    if (!canRefresh || autoTried.current) return
-    autoTried.current = true
+    if (!canRefresh) return
     let cancel = false
-    ;(async () => {
+
+    async function maybeAutoIngest(forceCheck = false) {
       try {
         const status = await api<{ needs_refresh?: boolean; last_updated?: string | null; running?: boolean }>(
           '/api/ingest/status',
@@ -380,16 +380,34 @@ function RefreshBar() {
         setLastUpdated(status.last_updated || null)
         if (!status.needs_refresh || status.running) return
         const lastAttempt = Number(localStorage.getItem('bi-last-ingest-attempt') || 0)
-        // Cooldown singkat saja — sebelumnya 90 menit membuat berita tampak "tidak otomatis".
-        if (Date.now() - lastAttempt < 20 * 60 * 1000) return
+        // Cooldown 15 menit supaya retry cepat setelah gagal/timeout, tanpa spam.
+        if (!forceCheck && Date.now() - lastAttempt < 15 * 60 * 1000) return
+        if (autoTried.current && !forceCheck) return
+        autoTried.current = true
         localStorage.setItem('bi-last-ingest-attempt', String(Date.now()))
         await runIngest('auto')
       } catch {
         /* status opsional */
       }
-    })()
+    }
+
+    void maybeAutoIngest(true)
+    // Selama dashboard terbuka: cek tiap 30 menit, tarik sumber jika sudah >2 jam.
+    const timer = window.setInterval(() => {
+      autoTried.current = false
+      void maybeAutoIngest(true)
+    }, 30 * 60 * 1000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        autoTried.current = false
+        void maybeAutoIngest(false)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
       cancel = true
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [canRefresh])
 
