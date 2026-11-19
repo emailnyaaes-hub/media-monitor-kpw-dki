@@ -81,7 +81,7 @@ export default function OverviewPage() {
 
       {!latest.loading && stories.length === 0 && (
         <Empty
-          label={`Belum ada berita pada kanal «${rubrikMeta.label}».`}
+          label={`Belum ada berita pada kanal «${RUBRIK.find((item) => item.id === rubrik)?.label || rubrik}».`}
           hint="Perlebar tanggal di header, atau tekan Perbarui bila data lama."
         />
       )}
