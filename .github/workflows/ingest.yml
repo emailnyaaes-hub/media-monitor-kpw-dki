@@ -1,0 +1,38 @@
+# Pembaruan data faktual setiap 2 jam.
+# Vercel Hobby hanya mengizinkan satu cron harian, jadi jadwal 2 jam memakai GitHub Actions.
+name: Perbarui data Danita
+
+on:
+  schedule:
+    - cron: "0 */2 * * *"
+  workflow_dispatch:
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Panggil pengambilan sumber
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: https://media-monitor-kpw-dki.vercel.app
+        run: |
+          set -euo pipefail
+          # Pakai CRON_SECRET bila ada; jika belum diisi di GitHub Secrets,
+          # fallback User-Agent yang diterima endpoint cron Vercel.
+          if [ -n "${CRON_SECRET:-}" ]; then
+            AUTH_HEADER=(-H "Authorization: Bearer ${CRON_SECRET}")
+            AGENT="danita-github-actions"
+          else
+            AUTH_HEADER=()
+            AGENT="vercel-cron"
+            echo "Peringatan: CRON_SECRET GitHub belum diisi; memakai User-Agent vercel-cron."
+          fi
+          code=$(curl -sS -m 280 -o /tmp/ingest.json -w "%{http_code}" \
+            "${AUTH_HEADER[@]}" \
+            -H "User-Agent: ${AGENT}" \
+            "${APP_URL}/api/cron/ingest")
+          echo "HTTP ${code}"
+          head -c 2000 /tmp/ingest.json || true
+          echo
+          test "$code" = "200"
