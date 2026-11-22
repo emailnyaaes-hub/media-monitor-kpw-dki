@@ -18,5 +18,7 @@ WORKDIR /app/backend
 ENV PORT=8000
 ENV TZ=Asia/Jakarta
 ENV PYTHONUNBUFFERED=1
+ENV BI_SKIP_URL_PROBE=1
+ENV BI_FAST_INGEST=1
 EXPOSE 8000
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

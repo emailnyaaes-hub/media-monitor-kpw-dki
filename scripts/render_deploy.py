@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Buat / cek layanan Danita di Render dari Cursor (butuh RENDER_API_KEY).
+"""Buat / cek layanan Danita di Render (butuh RENDER_API_KEY).
 
-Ambil kunci sekali di: https://dashboard.render.com/u/settings#api-keys
-Lalu:
+Ambil kunci: https://dashboard.render.com/u/settings#api-keys
+
   export RENDER_API_KEY=rnd_...
+  export BI_DATABASE_URL='postgresql://...@....neon.tech/neondb?sslmode=require'  # dari Neon/Vercel
+  export CRON_SECRET='...'   # sama dengan GitHub secret (opsional)
   python3 scripts/render_deploy.py
 """
 
@@ -64,7 +66,7 @@ def owners() -> list[dict]:
 def find_service(name: str) -> dict | None:
     cursor = ""
     while True:
-        path = f"/services?limit=50&name={name}"
+        path = f"/services?limit=100"
         if cursor:
             path += f"&cursor={cursor}"
         rows = req("GET", path)
@@ -81,6 +83,37 @@ def find_service(name: str) -> dict | None:
             return None
 
 
+def _env_vars() -> list[dict]:
+    vars_: list[dict] = [
+        {"key": "PYTHONUNBUFFERED", "value": "1"},
+        {"key": "TZ", "value": "Asia/Jakarta"},
+        {"key": "PORT", "value": "8000"},
+        {"key": "BI_FAST_INGEST", "value": "1"},
+        {"key": "BI_SKIP_URL_PROBE", "value": "1"},
+        {"key": "BI_DISABLE_SCHEDULER", "value": "1"},
+    ]
+    db = (
+        os.environ.get("BI_DATABASE_URL")
+        or os.environ.get("DATABASE_URL")
+        or ""
+    ).strip()
+    if db:
+        vars_.append({"key": "BI_DATABASE_URL", "value": db})
+    else:
+        print(
+            "Peringatan: BI_DATABASE_URL belum di-set — "
+            "Render akan pakai SQLite sementara (data hilang saat sleep/redeploy).",
+            flush=True,
+        )
+    cron = os.environ.get("CRON_SECRET", "").strip()
+    if cron:
+        vars_.append({"key": "CRON_SECRET", "value": cron})
+    auth = os.environ.get("BI_AUTH_SECRET", "").strip()
+    if auth:
+        vars_.append({"key": "BI_AUTH_SECRET", "value": auth})
+    return vars_
+
+
 def create_service(owner_id: str) -> dict:
     body = {
         "type": "web_service",
@@ -89,11 +122,7 @@ def create_service(owner_id: str) -> dict:
         "repo": REPO,
         "branch": "main",
         "autoDeployTrigger": "commit",
-        "envVars": [
-            {"key": "PYTHONUNBUFFERED", "value": "1"},
-            {"key": "TZ", "value": "Asia/Jakarta"},
-            {"key": "PORT", "value": "8000"},
-        ],
+        "envVars": _env_vars(),
         "serviceDetails": {
             "runtime": "docker",
             "plan": "free",
@@ -110,7 +139,16 @@ def create_service(owner_id: str) -> dict:
     return created
 
 
-def wait_live(service_id: str, timeout_s: int = 900) -> dict:
+def put_env(service_id: str) -> None:
+    """Perbarui env pada layanan yang sudah ada."""
+    req("PUT", f"/services/{service_id}/env-vars", _env_vars())
+
+
+def trigger_deploy(service_id: str) -> None:
+    req("POST", f"/services/{service_id}/deploys", {"clearCache": "do_not_clear"})
+
+
+def wait_live(service_id: str, timeout_s: int = 1200) -> dict:
     deadline = time.time() + timeout_s
     while time.time() < deadline:
         rows = req("GET", f"/services/{service_id}/deploys?limit=1")
@@ -130,30 +168,38 @@ def wait_live(service_id: str, timeout_s: int = 900) -> dict:
 def main() -> None:
     owns = owners()
     if not owns:
-        raise SystemExit("Tidak ada workspace Render. Login dulu di dashboard.render.com dengan GitHub.")
+        raise SystemExit(
+            "Tidak ada workspace Render. Login dulu di dashboard.render.com (hubungkan GitHub)."
+        )
     owner = owns[0]
     owner_id = owner.get("id")
     print(f"workspace: {owner.get('name') or owner.get('email')} ({owner_id})")
 
     existing = find_service(NAME)
     if existing:
-        print(f"layanan sudah ada: {existing.get('serviceDetails', {}).get('url') or existing.get('dashboardUrl')}")
+        service_id = str(existing.get("id"))
+        print(f"layanan sudah ada: {service_id}")
+        print("memperbarui env vars…")
+        put_env(service_id)
+        print("memicu deploy ulang…")
+        trigger_deploy(service_id)
         svc = existing
     else:
         print("membuat layanan web Docker dari GitHub…")
         svc = create_service(str(owner_id))
-        print(f"dibuat: {svc.get('id')}")
+        service_id = str(svc.get("id"))
+        print(f"dibuat: {service_id}")
 
-    service_id = str(svc.get("id"))
     url = (
         (svc.get("serviceDetails") or {}).get("url")
         or f"https://{NAME}.onrender.com"
     )
     print(f"URL: {url}")
-    print("menunggu deploy pertama…")
+    print("menunggu deploy…")
     wait_live(service_id)
     print(f"siap: {url}")
-    print(f"login: {url}/login  (admin / admin123)")
+    print(f"login: {url}/login")
+    print("Set GitHub secret APP_URL ke URL di atas bila beda dari default.")
 
 
 if __name__ == "__main__":

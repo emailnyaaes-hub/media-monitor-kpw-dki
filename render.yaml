@@ -1,5 +1,9 @@
-# Blueprint Render — hubungkan repo GitHub sekali, lalu push ke main = deploy ulang.
-# Dashboard: https://dashboard.render.com → New → Blueprint
+# Blueprint Render — New → Blueprint → pilih repo ini.
+# Dashboard: https://dashboard.render.com
+#
+# Wajib diisi saat create (sama seperti di Vercel/Neon):
+#   BI_DATABASE_URL  → connection string Neon (unpooled/direct lebih aman)
+#   CRON_SECRET      → sama dengan secret GitHub Actions
 services:
   - type: web
     name: media-monitor-kpw-dki
@@ -15,5 +19,16 @@ services:
         value: "1"
       - key: TZ
         value: Asia/Jakarta
-      - key: PORT
-        value: "8000"
+      - key: BI_FAST_INGEST
+        value: "1"
+      - key: BI_SKIP_URL_PROBE
+        value: "1"
+      # Pakai GitHub Actions tiap 2 jam (wake free tier + ingest_lite).
+      - key: BI_DISABLE_SCHEDULER
+        value: "1"
+      - key: BI_AUTH_SECRET
+        generateValue: true
+      - key: CRON_SECRET
+        sync: false
+      - key: BI_DATABASE_URL
+        sync: false

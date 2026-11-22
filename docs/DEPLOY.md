@@ -1,34 +1,44 @@
-# Deploy Danita (GitHub + Vercel)
+# Deploy Danita (GitHub + Render)
 
 ## URL produksi
 
-**https://media-monitor-kpw-dki.vercel.app**
+**https://media-monitor-kpw-dki.onrender.com**
 
-Akun: `admin` / `admin123`
+(Cadangan lama Vercel: `https://media-monitor-kpw-dki.vercel.app` — saat ini sering di-pause kuota.)
+
+Akun default seed: `admin` / `admin123`
 
 ## Cara kerja
 
-Satu **container Docker** (`Dockerfile.vercel`) berisi frontend (Vite build) + backend (FastAPI/uvicorn). Rewrite semua traffic ke service `app`.
+Satu **container Docker** (`Dockerfile`) berisi frontend (Vite build) + backend (FastAPI/uvicorn).
 
-- Tutup Cursor **tidak** mematikan app.
-- Push ke `main` + `vercel --prod`, atau hubungkan Git di dashboard Vercel untuk auto-deploy.
-- Cron Hobby: `GET /api/cron/ingest` sekali sehari (`0 1 * * *` UTC ≈ 08.00 WIB). Di luar itu pakai **Perbarui sekarang**.
-- Database produksi: Neon Postgres (region Singapura), variabel `DATABASE_URL` di proyek Vercel. Data tidak hilang saat instance berganti. SQLite lokal tetap dipakai kalau URL Postgres tidak ada.
+- Push ke `main` → auto-deploy Render (Blueprint / layanan yang terhubung).
+- Free Render: sleep setelah ~15 menit idle; GitHub Actions tiap 2 jam membangunkan + memanggil `/api/cron/ingest`.
+- Database produksi: **Neon Postgres** lewat `BI_DATABASE_URL` (salin dari proyek Neon / env Vercel lama). Tanpa ini, SQLite di disk ephemeral — data hilang saat sleep/redeploy.
 
-## Deploy dari Cursor
+## Deploy lewat Blueprint (UI)
+
+1. Buka [dashboard.render.com](https://dashboard.render.com) → **New → Blueprint**
+2. Pilih repo `emailnyaaes-hub/media-monitor-kpw-dki`
+3. Isi prompt env:
+   - `BI_DATABASE_URL` — URL Neon (unpooled)
+   - `CRON_SECRET` — sama dengan secret di GitHub Actions
+4. **Apply** / Deploy
+
+## Deploy lewat API (dari Cursor)
 
 ```bash
-export PATH=".tools/node/bin:$PATH"
-.tools/vercel-cli/node_modules/.bin/vercel login   # sekali
-.tools/vercel-cli/node_modules/.bin/vercel --prod --yes --non-interactive
+export RENDER_API_KEY=rnd_...          # https://dashboard.render.com/u/settings#api-keys
+export BI_DATABASE_URL='postgresql://...'
+export CRON_SECRET='...'               # opsional, samakan dengan GitHub
+python3 scripts/render_deploy.py
 ```
-
-Pastikan Root Directory proyek = `.` (bukan `frontend`), Framework = Other / Services.
 
 ## Verifikasi
 
 ```bash
-BASE=https://media-monitor-kpw-dki.vercel.app
-curl -s "$BASE/api/health"
-curl -s -o /dev/null -w "login %{http_code}\n" "$BASE/login"
+BASE=https://media-monitor-kpw-dki.onrender.com
+# cold start bisa 30–60 detik
+curl -sS -m 90 "$BASE/api/health"
+curl -sS -o /dev/null -w "login %{http_code}\n" -m 90 "$BASE/login"
 ```

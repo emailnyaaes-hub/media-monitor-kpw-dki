@@ -1,5 +1,4 @@
-# Pembaruan data faktual setiap 2 jam.
-# Vercel Hobby hanya mengizinkan satu cron harian, jadi jadwal 2 jam memakai GitHub Actions.
+# Pembaruan data faktual setiap 2 jam (bangunkan Render free + panggil ingest).
 name: Perbarui data Danita
 
 on:
@@ -10,26 +9,42 @@ on:
 jobs:
   ingest:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
       - name: Panggil pengambilan sumber
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          APP_URL: https://media-monitor-kpw-dki.vercel.app
+          # Override lewat secret APP_URL bila perlu; default = Render.
+          APP_URL: ${{ secrets.APP_URL }}
         run: |
           set -euo pipefail
+          APP_URL="${APP_URL:-https://media-monitor-kpw-dki.onrender.com}"
+          APP_URL="${APP_URL%/}"
+          echo "APP_URL=${APP_URL}"
+
           if [ -n "${CRON_SECRET:-}" ]; then
             AUTH_HEADER=(-H "Authorization: Bearer ${CRON_SECRET}")
             AGENT="danita-github-actions"
           else
             AUTH_HEADER=()
             AGENT="vercel-cron"
-            echo "Peringatan: CRON_SECRET GitHub belum diisi; memakai User-Agent vercel-cron."
+            echo "Peringatan: CRON_SECRET GitHub belum diisi."
           fi
 
-          before=$(curl -sS -m 25 "${APP_URL}/api/health" \
-            | python3 -c "import sys,json; print(json.load(sys.stdin).get('last_ingest_at') or '')" \
-            || true)
+          # Free Render: cold start ~1 menit — bangunkan dulu.
+          echo "Membangunkan layanan…"
+          for i in 1 2 3 4 5 6; do
+            set +e
+            wake=$(curl -sS -m 90 -o /tmp/health.json -w "%{http_code}" "${APP_URL}/api/health")
+            set -e
+            echo "wake attempt ${i}: HTTP ${wake}"
+            if [ "$wake" = "200" ]; then
+              break
+            fi
+            sleep 15
+          done
+
+          before=$(python3 -c "import json; print(json.load(open('/tmp/health.json')).get('last_ingest_at') or '')" 2>/dev/null || true)
           echo "last_ingest sebelum: ${before:-"(kosong)"}"
 
           set +e
@@ -48,11 +63,10 @@ jobs:
             exit 0
           fi
 
-          # Vercel sering 504/502 meski ingest_lite sudah menulis last_ingest_at di awal.
-          if [ "$code" = "504" ] || [ "$code" = "502" ] || [ "$code" = "000" ]; then
-            echo "Respons gateway timeout — cek apakah data sempat terbarui…"
-            sleep 8
-            after=$(curl -sS -m 25 "${APP_URL}/api/health" \
+          if [ "$code" = "504" ] || [ "$code" = "502" ] || [ "$code" = "000" ] || [ "$code" = "503" ]; then
+            echo "Timeout/gateway — cek apakah data sempat terbarui…"
+            sleep 10
+            after=$(curl -sS -m 90 "${APP_URL}/api/health" \
               | python3 -c "import sys,json; print(json.load(sys.stdin).get('last_ingest_at') or '')" \
               || true)
             echo "last_ingest sesudah: ${after:-"(kosong)"}"
