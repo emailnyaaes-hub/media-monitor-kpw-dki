@@ -503,7 +503,12 @@ def _is_kpw_provinsi(folded: str, row: Mention) -> bool:
             or re.search(r"\bbi\s+" + re.escape(name.casefold()) + r"\b", folded)
         ):
             return True
-    if (_KPW_MARKERS.search(folded) or "kantor perwakilan" in folded) and _other_kpw_province_hit(folded):
+    if (
+        _KPW_MARKERS.search(folded)
+        or "kantor perwakilan" in folded
+        or re.search(r"\bkpw\b", folded)
+        or re.search(r"\bbank\s+indonesia\b", folded)
+    ) and _other_kpw_province_hit(folded):
         return True
     if re.search(r"\bkpw\s*bi\b", folded, re.I) and any(name.casefold() in folded for name in _OTHER_PROVINCES):
         return True
