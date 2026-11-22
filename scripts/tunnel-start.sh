@@ -61,7 +61,12 @@ if curl -sf -m 2 http://127.0.0.1:8000/api/health >/dev/null 2>&1; then
   echo "API sudah jalan di :8000"
 else
   : >"$APP_LOG"
-  nohup .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 >>"$APP_LOG" 2>&1 &
+  # Detach dari session shell Cursor agar proses tidak ikut mati.
+  (
+    cd "$ROOT/backend"
+    exec .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+  ) >>"$APP_LOG" 2>&1 &
+  disown $! 2>/dev/null || true
   echo $! >"$PID_APP"
   for _ in $(seq 1 30); do
     curl -sf -m 2 http://127.0.0.1:8000/api/health >/dev/null 2>&1 && break
@@ -76,7 +81,10 @@ else
 fi
 
 : >"$TUN_LOG"
-nohup "$CF" tunnel --url http://127.0.0.1:8000 --no-autoupdate >"$TUN_LOG" 2>&1 &
+(
+  exec "$CF" tunnel --url http://127.0.0.1:8000 --no-autoupdate
+) >"$TUN_LOG" 2>&1 &
+disown $! 2>/dev/null || true
 echo $! >"$PID_TUN"
 
 URL=""
