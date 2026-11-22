@@ -444,8 +444,29 @@ _KPW_PROVINCE_ALIASES = (
     ("sumut", "sumatera utara"),
     ("sumsel", "sumatera selatan"),
     ("kaltim", "kalimantan timur"),
+    ("kalteng", "kalimantan tengah"),
     ("sulsel", "sulawesi selatan"),
     ("sulut", "sulawesi utara"),
+    ("ntt", "nusa tenggara timur"),
+    ("ntb", "nusa tenggara barat"),
+)
+
+# Kota/wilayah KPw non-DKI yang sering muncul di judul media.
+_NON_DKI_KPW_PLACES = (
+    "purwokerto",
+    "surabaya",
+    "bandung",
+    "semarang",
+    "medan",
+    "makassar",
+    "denpasar",
+    "palembang",
+    "pontianak",
+    "balikpapan",
+    "manado",
+    "yogyakarta",
+    "solo",
+    "malang",
 )
 
 
@@ -453,13 +474,17 @@ def _other_kpw_province_hit(folded: str) -> bool:
     for pattern in _KPW_OTHER_PROVINCE:
         if pattern.search(folded):
             return True
+    bi_org = bool(_KPW_MARKERS.search(folded) or re.search(r"\bbank\s+indonesia\b", folded) or "kantor perwakilan" in folded)
     for name in _OTHER_PROVINCES:
-        if name.casefold() in folded and _KPW_MARKERS.search(folded):
+        if name.casefold() in folded and bi_org:
             return True
-    # Singkatan media: KPwBI Jabar, BI Jatim, dll.
-    if _KPW_MARKERS.search(folded) or "kantor perwakilan" in folded:
+    # Singkatan media: KPwBI Jabar, BI Jatim, KPw NTT, dll.
+    if bi_org or _KPW_MARKERS.search(folded):
         for alias, _canon in _KPW_PROVINCE_ALIASES:
             if re.search(r"\b" + re.escape(alias) + r"\b", folded):
+                return True
+        for place in _NON_DKI_KPW_PLACES:
+            if re.search(r"\b" + re.escape(place) + r"\b", folded):
                 return True
     return False
 
