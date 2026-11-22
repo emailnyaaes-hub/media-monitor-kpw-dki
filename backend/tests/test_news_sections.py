@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime
 
 from app.models import Mention
-from app.services.news_sections import classify_feed_section
+from app.services.news_sections import classify_feed_section, row_matches_feed_section, select_for_feed_section
 
 
 def row(**extra):
@@ -141,6 +141,48 @@ class NewsSectionTests(unittest.TestCase):
             classify_feed_section(row(title="Pemerintah evaluasi infrastruktur nasional", text="Cuplikan umum.")),
             "beranda",
         )
+
+    def test_pemprov_not_in_kpw_tab(self):
+        """Berita Pemprov murni tidak boleh muncul di filter KPw DKI."""
+        samples = [
+            row(
+                title="Pramono Minta Jalan Longsor di Pasar Minggu Ditangani Permanen",
+                source_name="Portal Pemprov DKI",
+                author_name="Pemprov DKI Jakarta",
+                location="DKI Jakarta",
+                category="Ekonomi Jakarta",
+                is_kpw=True,
+                feed_section="kpw_dki",  # kotor di DB — live harus menolak
+                url="https://www.beritajakarta.id/read/156748/pramono-minta-jalan-longsor",
+            ),
+            row(
+                title="Pemprov DKI Jakarta luncurkan program ekonomi warga",
+                text="Gubernur DKI tinjau pasar.",
+                category="Ekonomi Jakarta",
+                feed_section="kpw_dki",
+            ),
+            row(
+                title="Balai Kota Jakarta gelar rapat koordinasi banjir",
+                source_name="Berita Jakarta",
+                url="https://www.beritajakarta.id/read/1/balai-kota",
+                is_kpw=True,
+            ),
+        ]
+        for item in samples:
+            self.assertEqual(classify_feed_section(item), "pemprov_dki", item.title)
+            self.assertFalse(row_matches_feed_section(item, "kpw_dki"), item.title)
+            self.assertTrue(row_matches_feed_section(item, "pemprov_dki"), item.title)
+
+    def test_select_kpw_excludes_pemprov_mix(self):
+        kpw = row(title="KPw BI DKI Jakarta edukasi QRIS", category="Kegiatan KPw DKI")
+        pemprov = row(
+            title="Gubernur DKI Pramono Anung tinjau banjir",
+            source_name="Portal Pemprov DKI",
+            url="https://beritajakarta.id/x",
+            feed_section="kpw_dki",
+        )
+        picked = select_for_feed_section([kpw, pemprov], "kpw_dki")
+        self.assertEqual([r.title for r in picked], [kpw.title])
 
 
 if __name__ == "__main__":

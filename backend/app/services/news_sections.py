@@ -185,16 +185,24 @@ def classify_feed_section(row: Mention) -> str:
 
 
 def _pemprov_bi_collab(folded: str, row: Mention) -> bool:
-    """Kolaborasi BI/KPw + Pemprov tetap ke rubrik KPw DKI."""
+    """Kolaborasi BI/KPw DKI + Pemprov → rubrik KPw DKI. Bukan sembarang «KPw BI» provinsi lain."""
+    if _other_kpw_province_hit(folded):
+        return False
     if _KPW_DKI.search(folded) or any(h in folded for h in _KPW_DKI_HANDLES):
         return True
-    if "bi dki" in folded or "bi dan pemprov" in folded or "kpw" in folded:
+    if "bi dki" in folded or "bi jakarta" in folded or "bi dan pemprov" in folded:
         return True
-    if re.search(r"\bbank\s+indonesia\b", folded) and re.search(r"\b(?:pemprov|dki|jakarta)\b", folded):
+    # Wajib ada kata Pemprov + sinyal BI/KPw (bukan KPw Jabar semata).
+    if not re.search(r"\bpemprov\b", folded):
+        return False
+    if re.search(r"\bkpw\s*bi\b|\bkpwbi\b|\bkpw\s*dki\b", folded):
+        return True
+    if re.search(r"\b(?:bank\s+indonesia|(?<![a-z])bi(?![a-z]))\b", folded):
         return True
     return False
 
 
+# Hanya frasa yang mengikat ke BI/KPw DKI — jangan «ekonomi jakarta» (sering berita Pemprov).
 _KPW_DKI_NEEDLES = (
     "iwan setiawan",
     "kpwbi",
@@ -207,11 +215,8 @@ _KPW_DKI_NEEDLES = (
     "jakarta economic forum",
     "tpid jakarta",
     "tim pengendalian inflasi daerah jakarta",
-    "perekonomian dki jakarta",
-    "ekonomi dki jakarta",
-    "ekonomi jakarta",
     "inflasi tahunan dki",
-    "kerak telor",
+    "kerak telor bi",
     "umkm dki jakarta",
     "indonesia sharia economic forum",
     "jakarta youth leadership",
@@ -220,7 +225,6 @@ _KPW_DKI_NEEDLES = (
     "bi dan pemprov dki",
     "jitex",
     "isef",
-    " jef",
 )
 
 _KPW_PROVINSI_NEEDLES = (
@@ -251,33 +255,74 @@ _PEMPROV_DKI_NEEDLES = (
 )
 
 
+_THEMATIC = frozenset({"kpw_dki", "kpw_provinsi", "pemprov_dki", "bi_nasional"})
+
+
 def row_matches_feed_section(row: Mention, section: str) -> bool:
-    """Pakai kolom tersimpan ATAU klasifikasi live — agar rubrik tidak kosong bila retag belum jalan."""
+    """Klasifikasi live menang; kolom tersimpan hanya jika tidak bentrok rubrik tematik lain."""
     if not section or section == "beranda":
         return True
-    if (getattr(row, "feed_section", None) or "") == section:
+    live = classify_feed_section(row)
+    if live == section:
         return True
-    if classify_feed_section(row) == section:
+    # Jangan tarik berita Pemprov ke tab KPw (atau sebaliknya) lewat soft/stored yang kotor.
+    if live in _THEMATIC and live != section:
+        return False
+    stored = (getattr(row, "feed_section", None) or "").strip()
+    if stored == section and live in {"beranda", section, ""}:
+        if section == "kpw_dki" and _official_pemprov_source(row):
+            hay = _haystack(row)
+            return _pemprov_bi_collab(hay, row)
+        if section == "pemprov_dki" and _soft_kpw_dki(row) and _has_strong_bi_org(row):
+            return False
         return True
-    if section == "kpw_dki" and _soft_kpw_dki(row):
-        return True
-    if section == "kpw_provinsi" and _soft_kpw_provinsi(row):
-        return True
-    if section == "pemprov_dki" and _soft_pemprov_dki(row):
-        return True
+    if live != "beranda":
+        return False
+    if section == "kpw_dki":
+        return _soft_kpw_dki(row)
+    if section == "kpw_provinsi":
+        return _soft_kpw_provinsi(row)
+    if section == "pemprov_dki":
+        return _soft_pemprov_dki(row)
     return False
 
 
+def _haystack(row: Mention) -> str:
+    return (
+        f"{row.title or ''}\n{row.text or ''}\n{row.source_name or ''}\n"
+        f"{row.author_name or ''}\n{row.author_handle or ''}\n{row.location or ''}"
+    ).casefold()
+
+
+def _has_strong_bi_org(row: Mention) -> bool:
+    hay = _haystack(row)
+    if getattr(row, "quotes_bi", False):
+        return True
+    return bool(
+        re.search(
+            r"\b(?:bank\s+indonesia|kpw\s*bi|kpwbi|bi\s+dki|bi\s+jakarta|bi-rate|bi-fast|\bqris\b)\b",
+            hay,
+        )
+    )
+
+
 def _soft_kpw_dki(row: Mention) -> bool:
-    """Cadangan longgar: keyword katalog / flag lokal supaya rubrik tidak kosong."""
-    hay = f"{row.title or ''} {row.text or ''} {row.location or ''} {row.author_name or ''}".casefold()
+    """Cadangan ketat: harus ada jejak BI/KPw DKI — bukan sekadar «Jakarta»/Pemprov."""
+    hay = _haystack(row)
+    if _official_pemprov_source(row) and not _pemprov_bi_collab(hay, row):
+        return False
     if _other_kpw_province_hit(hay):
         return False
     if any(needle in hay for needle in _KPW_DKI_NEEDLES):
         return True
-    if row.category in {"Kegiatan KPw DKI", "Ekonomi Jakarta"}:
+    if bool(_KPW_DKI.search(hay)) or bool(_KPW_DKI_PROGRAMS.search(hay)):
         return True
-    if getattr(row, "is_kpw", False) and ("jakarta" in hay or "dki" in hay):
+    if row.category == "Kegiatan KPw DKI" and not _other_kpw_province_hit(hay):
+        return True
+    # «Ekonomi Jakarta» saja = terlalu longgar (sering berita Pemprov). Wajib sinyal BI/KPw.
+    if row.category == "Ekonomi Jakarta" and _has_strong_bi_org(row):
+        return True
+    if getattr(row, "is_kpw", False) and _has_strong_bi_org(row) and ("jakarta" in hay or "dki" in hay):
         return True
     return False
 
@@ -296,12 +341,16 @@ def _soft_kpw_provinsi(row: Mention) -> bool:
 
 def _soft_pemprov_dki(row: Mention) -> bool:
     """Cadangan: sinyal Pemprov/Pemda DKI tanpa wajib frasa lengkap."""
-    hay = f"{row.title or ''} {row.text or ''} {row.location or ''} {row.author_name or ''} {row.author_handle or ''}".casefold()
+    hay = _haystack(row)
     if _official_pemprov_source(row) and not _pemprov_bi_collab(hay, row):
         return True
-    if classify_feed_section(row) in {"kpw_dki", "kpw_provinsi"}:
+    live = classify_feed_section(row)
+    if live in {"kpw_dki", "kpw_provinsi"}:
         return False
     if any(needle in hay for needle in _PEMPROV_DKI_NEEDLES):
+        # Jangan campur berita BI/KPw ke Pemprov lewat soft needle.
+        if _has_strong_bi_org(row) and (_KPW_DKI.search(hay) or "bi dki" in hay or "kpw" in hay):
+            return False
         return True
     if re.search(r"\b(?:gubernur|wagub|pemda|dinas)\b", hay) and re.search(r"\b(?:dki|jakarta)\b", hay):
         if not re.search(r"\b(?:bank\s+indonesia|\bbi\b|kpw)\b", hay):
@@ -310,26 +359,10 @@ def _soft_pemprov_dki(row: Mention) -> bool:
 
 
 def select_for_feed_section(rows: list, section: str) -> list:
-    """Filter rubrik; jika masih kosong, longgarkan ke soft-match / sinyal terkait."""
+    """Filter rubrik ketat — tanpa fallback «semua yang ada kata Jakarta»."""
     if not section or section == "beranda":
         return list(rows)
-    matched = [row for row in rows if row_matches_feed_section(row, section)]
-    if matched:
-        return matched
-    if section == "kpw_dki":
-        loose = []
-        for row in rows:
-            hay = f"{row.title or ''} {row.text or ''} {row.location or ''}".casefold()
-            if _other_kpw_province_hit(hay):
-                continue
-            if "jakarta" in hay or re.search(r"\bdki\b", hay) or getattr(row, "is_kpw", False):
-                loose.append(row)
-        return loose
-    if section == "kpw_provinsi":
-        return [row for row in rows if _soft_kpw_provinsi(row)]
-    if section == "pemprov_dki":
-        return [row for row in rows if _soft_pemprov_dki(row)]
-    return matched
+    return [row for row in rows if row_matches_feed_section(row, section)]
 
 
 def _has_jakarta(folded: str, row: Mention) -> bool:
@@ -341,24 +374,34 @@ def _has_jakarta(folded: str, row: Mention) -> bool:
 
 
 def _has_bi_signal(folded: str, row: Mention) -> bool:
+    """Sinyal organisasi/kebijakan BI — bukan sekadar «rupiah» di berita Pemprov."""
     if getattr(row, "quotes_bi", False):
         return True
-    return bool(
-        re.search(
-            r"\b(?:bank\s+indonesia|\bbi\b|kpw|qris|bi-rate|bi-fast|tpid|rupiah)\b",
-            folded,
-        )
-    )
+    if re.search(
+        r"\b(?:bank\s+indonesia|kpw\s*bi|kpwbi|bi\s+dki|bi\s+jakarta|"
+        r"bi-rate|bi-fast|\bqris\b|tpid\b|gubernur\s+bi)\b",
+        folded,
+    ):
+        return True
+    # Kata «BI» berdiri sendiri.
+    return bool(re.search(r"(?<![a-z])bi(?![a-z])", folded))
 
 
 def _is_kpw_dki(folded: str, row: Mention) -> bool:
-    # Jangan tarik berita portal Pemprov ke KPw kecuali kolaborasi BI eksplisit.
-    if _official_pemprov_source(row) and not _pemprov_bi_collab(folded, row):
-        return False
     explicit_dki = bool(_KPW_DKI.search(folded)) or any(handle in folded for handle in _KPW_DKI_HANDLES)
     # KPw provinsi lain selalu menang — termasuk bila NLP salah label «Kegiatan KPw DKI».
     if _other_kpw_province_hit(folded) and not explicit_dki:
         return False
+    # Jangan tarik berita portal Pemprov ke KPw kecuali kolaborasi BI eksplisit.
+    if _official_pemprov_source(row) and not _pemprov_bi_collab(folded, row):
+        return False
+    # Sinergi BI + Pemprov (DKI) → rubrik KPw DKI (bukan Pemprov murni).
+    if _pemprov_bi_collab(folded, row):
+        return True
+    # Berita Pemprov murni (Pramono/Balai Kota/dll) tanpa BI/KPw → bukan KPw.
+    if _PEMPROV_DKI.search(folded) and not _has_bi_signal(folded, row) and not _KPW_DKI.search(folded):
+        if not any(h in folded for h in _KPW_DKI_HANDLES):
+            return False
 
     program_hit = bool(_KPW_DKI_PROGRAMS.search(folded))
     # Akronim pendek (JEF/ISEF/JITEX) hanya jika ada jejak BI/KPw/Jakarta ekonomi.
@@ -373,17 +416,23 @@ def _is_kpw_dki(folded: str, row: Mention) -> bool:
         or explicit_dki
         or program_hit
     )
-    # Perluas: berita BI/KPw yang menyinggung Jakarta/DKI masuk rubrik KPw DKI
-    # (bukan KPw provinsi lain).
+    # BI/KPw + Jakarta/DKI → KPw DKI. Butuh sinyal org BI, bukan hanya lokasi.
+    pemprov_murni = bool(_PEMPROV_DKI.search(folded)) and not _pemprov_bi_collab(folded, row)
     local_bi = (
         _has_jakarta(folded, row)
         and _has_bi_signal(folded, row)
         and not _other_kpw_province_hit(folded)
+        and not pemprov_murni
     )
-    ekonomi_jakarta = row.category == "Ekonomi Jakarta" and (
-        _has_bi_signal(folded, row) or bool(getattr(row, "is_kpw", False))
+    # Kategori Ekonomi Jakarta + is_kpw tanpa jejak BI → jangan anggap KPw (salah label NLP).
+    ekonomi_jakarta = row.category == "Ekonomi Jakarta" and _has_bi_signal(folded, row) and not pemprov_murni
+    flagged = (
+        bool(getattr(row, "is_kpw", False))
+        and _has_jakarta(folded, row)
+        and _has_bi_signal(folded, row)
+        and not (_official_pemprov_source(row) and not _pemprov_bi_collab(folded, row))
+        and not pemprov_murni
     )
-    flagged = bool(getattr(row, "is_kpw", False)) and _has_jakarta(folded, row) and _has_bi_signal(folded, row)
 
     return bool(explicit or local_bi or ekonomi_jakarta or flagged)
 
@@ -454,10 +503,8 @@ def _is_pemprov_dki(folded: str, row: Mention) -> bool:
     # Kolaborasi BI+Pemprov tetap prioritas KPw DKI (sudah dicek di atas).
     if _KPW_DKI.search(folded) or any(h in folded for h in _KPW_DKI_HANDLES):
         return False
-    # Portal resmi Pemprov / BeritaJakarta = rubrik Pemprov, kecuali berita BI/KPw eksplisit.
-    if _official_pemprov_source(row) and not (
-        _has_bi_signal(folded, row) and (_KPW_DKI.search(folded) or "bi dki" in folded or "kpw" in folded)
-    ):
+    # Portal resmi Pemprov / BeritaJakarta = rubrik Pemprov, kecuali kolaborasi BI/KPw.
+    if _official_pemprov_source(row) and not _pemprov_bi_collab(folded, row):
         return True
     if _PEMPROV_DKI.search(folded):
         return True
