@@ -1,44 +1,33 @@
-# Deploy Danita (GitHub + Render)
+# Deploy Danita
 
-## URL produksi
+## Produksi saat ini: Cloudflare Tunnel (dari Mac/VPS)
 
-**https://media-monitor-kpw-dki.onrender.com**
-
-(Cadangan lama Vercel: `https://media-monitor-kpw-dki.vercel.app` — saat ini sering di-pause kuota.)
-
-Akun default seed: `admin` / `admin123`
-
-## Cara kerja
-
-Satu **container Docker** (`Dockerfile`) berisi frontend (Vite build) + backend (FastAPI/uvicorn).
-
-- Push ke `main` → auto-deploy Render (Blueprint / layanan yang terhubung).
-- Free Render: sleep setelah ~15 menit idle; GitHub Actions tiap 2 jam membangunkan + memanggil `/api/cron/ingest`.
-- Database produksi: **Neon Postgres** lewat `BI_DATABASE_URL` (salin dari proyek Neon / env Vercel lama). Tanpa ini, SQLite di disk ephemeral — data hilang saat sleep/redeploy.
-
-## Deploy lewat Blueprint (UI)
-
-1. Buka [dashboard.render.com](https://dashboard.render.com) → **New → Blueprint**
-2. Pilih repo `emailnyaaes-hub/media-monitor-kpw-dki`
-3. Isi prompt env:
-   - `BI_DATABASE_URL` — URL Neon (unpooled)
-   - `CRON_SECRET` — sama dengan secret di GitHub Actions
-4. **Apply** / Deploy
-
-## Deploy lewat API (dari Cursor)
+App jalan di mesin lokal (`uvicorn` :8000), dipublikasikan lewat **Cloudflare Quick Tunnel**.
 
 ```bash
-export RENDER_API_KEY=rnd_...          # https://dashboard.render.com/u/settings#api-keys
-export BI_DATABASE_URL='postgresql://...'
-export CRON_SECRET='...'               # opsional, samakan dengan GitHub
-python3 scripts/render_deploy.py
+./scripts/tunnel-start.sh
+# URL muncul di terminal + .tools/run/tunnel-url.txt
 ```
 
-## Verifikasi
+- Mac/VPS **harus tetap menyala** dan terhubung internet.
+- Quick tunnel (`*.trycloudflare.com`) **URL berubah** tiap restart.
+- Untuk URL tetap: buat Named Tunnel di akun Cloudflare + domain, lalu arahkan ke `http://127.0.0.1:8000`.
+- Database: set `BI_DATABASE_URL` (Neon) di environment shell sebelum start, agar data tidak hanya di SQLite lokal.
+
+Stop:
 
 ```bash
-BASE=https://media-monitor-kpw-dki.onrender.com
-# cold start bisa 30–60 detik
-curl -sS -m 90 "$BASE/api/health"
-curl -sS -o /dev/null -w "login %{http_code}\n" -m 90 "$BASE/login"
+kill "$(cat .tools/run/tunnel.pid)" "$(cat .tools/run/danita.pid)"
 ```
+
+## Cadangan lain
+
+| Platform | URL | Catatan |
+|---|---|---|
+| Render | https://media-monitor-kpw-dki.onrender.com | Free bisa sleep; butuh `BI_DATABASE_URL` |
+| Vercel | https://media-monitor-kpw-dki.vercel.app | Sering di-pause kuota Hobby |
+
+## Ingest otomatis
+
+- Di mode tunnel (bukan Vercel): penjadwal proses tiap 2 jam aktif di mesin yang menjalankan app.
+- GitHub Actions tetap bisa memanggil `/api/cron/ingest` jika secret `APP_URL` diisi URL tunnel terkini.
