@@ -1130,10 +1130,11 @@ def cron_ingest(request: Request, db: Session = Depends(get_db)):
     """Dipanggil Vercel Cron (GET). Auth: Bearer CRON_SECRET atau User-Agent vercel-cron."""
     secret = os.environ.get("CRON_SECRET", "").strip()
     auth = request.headers.get("authorization") or ""
-    agent = request.headers.get("user-agent") or ""
+    agent = (request.headers.get("user-agent") or "").lower()
     if secret and auth == f"Bearer {secret}":
         pass
-    elif "vercel-cron" in agent.lower():
+    elif "vercel-cron" in agent or "danita-github-actions" in agent:
+        # Actions / cron tanpa secret yang sama di Render tetap diizinkan lewat User-Agent.
         pass
     else:
         raise HTTPException(status_code=401, detail="Cron tidak diizinkan")

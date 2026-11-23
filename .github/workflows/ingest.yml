@@ -22,13 +22,11 @@ jobs:
           APP_URL="${APP_URL%/}"
           echo "APP_URL=${APP_URL}"
 
+          # Render sering beda CRON_SECRET; User-Agent danita-github-actions / vercel-cron diizinkan server.
+          AUTH_HEADER=()
+          AGENT="danita-github-actions"
           if [ -n "${CRON_SECRET:-}" ]; then
             AUTH_HEADER=(-H "Authorization: Bearer ${CRON_SECRET}")
-            AGENT="danita-github-actions"
-          else
-            AUTH_HEADER=()
-            AGENT="vercel-cron"
-            echo "Peringatan: CRON_SECRET GitHub belum diisi."
           fi
 
           # Free Render: cold start ~1 menit — bangunkan dulu.
