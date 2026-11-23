@@ -250,6 +250,9 @@ _PEMPROV_DKI_NEEDLES = (
     "gubernur dki",
     "gubernur jakarta",
     "wagub dki",
+    "ump jakarta",
+    "ump dki",
+    "bank jakarta",
     "@dkijakarta",
     "@pemprovdki",
 )
@@ -546,6 +549,11 @@ def _is_pemprov_dki(folded: str, row: Mention) -> bool:
     if "pramono anung" in folded and re.search(r"\b(?:jakarta|dki|gubernur)\b", folded):
         return True
     if "rano karno" in folded and re.search(r"\b(?:jakarta|dki|wagub|gubernur)\b", folded):
+        return True
+    # Kebijakan ketenagakerjaan / BUMD DKI yang sering tanpa kata «Pemprov».
+    if re.search(r"\bump\s+(?:jakarta|dki)\b", folded) and not _has_bi_signal(folded, row):
+        return True
+    if re.search(r"\bbank\s+jakarta\b", folded) and not _has_bi_signal(folded, row):
         return True
     if row.category == "Ekonomi Jakarta" and _PEMPROV_DKI.search(folded):
         return True

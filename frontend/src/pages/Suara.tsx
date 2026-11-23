@@ -155,19 +155,28 @@ export default function SuaraPage() {
         <div className="mb-4 grid gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2">
             <h2 className="font-medium">Komposisi suara publik</h2>
-            <p className="text-xs text-muted">Dari {data.data.total} konten eksternal. Satu konten bisa masuk lebih dari satu dimensi.</p>
+            <p className="text-xs text-muted">
+              Dari {data.data.total} konten eksternal. Keluhan–hoaks bisa tumpang tindih; «Informatif» = berita tanpa sinyal empat dimensi itu; «Ramai» = lonjakan volume topik.
+            </p>
             <ul className="mt-3 space-y-2">
-              {data.data.komposisi.map((item) => (
-                <li key={item.id} className="grid grid-cols-[11rem_1fr_9rem] items-center gap-2 text-sm">
-                  <span>{item.label}</span>
-                  <span className="h-2 bg-line" aria-hidden>
-                    <span className="block h-2 bg-navy-800" style={{ width: `${item.pangsa}%` }} />
-                  </span>
-                  <span className="text-right tabular-nums">
-                    {item.id === 'ramai' && !data.data?.ramai_tersedia ? 'belum bisa dihitung' : `${item.jumlah} · ${item.pangsa.toLocaleString('id-ID')}%`}
-                  </span>
-                </li>
-              ))}
+              {data.data.komposisi.map((item) => {
+                const ramaiPending = item.id === 'ramai' && !data.data?.ramai_tersedia && item.jumlah === 0
+                const width = Math.min(100, Math.max(item.pangsa, item.jumlah > 0 ? 2 : 0))
+                return (
+                  <li key={item.id} className="grid grid-cols-[12rem_1fr_9rem] items-center gap-2 text-sm">
+                    <span>{item.label}</span>
+                    <span className="h-2 bg-line" aria-hidden>
+                      <span
+                        className={`block h-2 ${item.id === 'informatif' ? 'bg-slate-400' : item.id === 'ramai' ? 'bg-amber-700' : 'bg-navy-800'}`}
+                        style={{ width: `${width}%` }}
+                      />
+                    </span>
+                    <span className="text-right tabular-nums">
+                      {ramaiPending ? 'belum cukup data' : `${item.jumlah} · ${item.pangsa.toLocaleString('id-ID')}%`}
+                    </span>
+                  </li>
+                )
+              })}
             </ul>
             <p className="mt-3 text-xs text-muted">{data.data.aturan_ramai}</p>
             {data.data.topik_ramai.length > 0 && <p className="mt-1 text-sm">Topik ramai: {data.data.topik_ramai.join(', ')}</p>}

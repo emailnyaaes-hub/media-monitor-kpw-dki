@@ -16,11 +16,12 @@ from app.services.serialize import loads
 
 VOICES = ("keluhan", "apresiasi", "kebutuhan", "hoaks")
 VOICE_LABEL = {
-    "ramai": "Ramai",
-    "keluhan": "Keluhan",
-    "apresiasi": "Apresiasi",
+    "ramai": "Ramai (lonjakan topik)",
+    "keluhan": "Keluhan / kritik",
+    "apresiasi": "Apresiasi / dukungan",
     "kebutuhan": "Kebutuhan dan harapan",
     "hoaks": "Salah paham dan hoaks",
+    "informatif": "Informatif / berita umum",
 }
 
 VOICE_TERMS = {
@@ -28,18 +29,26 @@ VOICE_TERMS = {
         "keluhan", "komplain", "kecewa", "kesal", "sulit", "bingung", "ribet",
         "error", "gagal", "gangguan", "lambat", "antri", "mahal", "palsu",
         "tidak bisa", "tidak dapat", "bermasalah",
+        # Frasa berita/opini yang sering muncul di media
+        "kritik", "mengkritik", "tolak", "menolak", "protes", "demo", "ancam",
+        "gugat", "melemah", "anjlok", "tertekan", "lunglai", "beban", "merugikan",
+        "kontroversi", "sorotan negatif",
     ),
     "apresiasi": (
         "memudahkan", "mudah", "lancar", "terbantu", "puas", "apresiasi",
         "bermanfaat", "praktis", "membantu", "sukses",
+        "dukung", "mendukung", "optimistis", "menguat", "perkuat", "memperkuat",
+        "positif", "apresiasi publik", "diapresiasi", "berhasil",
     ),
     "kebutuhan": (
         "diharapkan", "harapan", "butuh", "perlu edukasi", "minta", "sosialisasi",
         "diperluas", "akses", "literasi", "dibutuhkan",
+        "mendesak", "desak", "dorong", "perlu ada", "seharusnya", "agar segera",
     ),
     "hoaks": (
         "hoaks", "hoax", "penipuan", "mengatasnamakan", "modus", "phishing",
-        "lowongan palsu", "undian",
+        "lowongan palsu", "undian", "klarifikasi", "dibantah", "isu palsu",
+        "berita bohong", "penipuan mengatasnamakan",
     ),
 }
 
@@ -245,21 +254,39 @@ def area_of(row) -> str:
     location = getattr(row, "location", "") or ""
     if location in JAKARTA_AREAS:
         return location
+    hay = _hay(row)
+    for area in JAKARTA_AREAS:
+        if area.casefold() in hay:
+            return area
+    # Nama wilayah umum di judul berita DKI.
+    if "kepulauan seribu" in hay:
+        return "Kepulauan Seribu"
+    if any(token in hay for token in ("jakarta pusat", "jakarta utara", "jakarta barat", "jakarta selatan", "jakarta timur")):
+        for area in JAKARTA_AREAS:
+            if area.casefold() in hay:
+                return area
+    if "dki jakarta" in hay or "provinsi dki" in hay or "pemprov dki" in hay:
+        return "DKI Jakarta"
+    if " jakarta" in hay or hay.startswith("jakarta"):
+        return "DKI Jakarta"
     return ""
 
 
 def describe_mention(row) -> dict:
     voices = voices_of(row)
+    labels = [VOICE_LABEL[item] for item in voices]
+    if not voices:
+        labels = [VOICE_LABEL["informatif"]]
     return {
         "voices": voices,
-        "voice_labels": [VOICE_LABEL[item] for item in voices],
+        "voice_labels": labels,
         "voice_corrected": bool((getattr(row, "voice_override", "") or "").strip()),
         "segment": segment_of(row),
         "segment_corrected": bool((getattr(row, "segment_override", "") or "").strip()),
         "topic": topic_of(row),
         "area": area_of(row) or "wilayah tidak diketahui",
         "narrative": narrative_of(row),
-        "method": "Leksikon pada judul dan cuplikan. Bukan profil orang. Lokasi hanya bila nama wilayah sudah tersimpan.",
+        "method": "Leksikon pada judul dan cuplikan. Bukan profil orang. Lokasi dari kolom lokasi atau nama wilayah di teks.",
     }
 
 
@@ -601,11 +628,21 @@ def solution_table(rows: list) -> list[dict]:
     return items
 
 
-def _ramai_topics(current: list, previous: list) -> set[str]:
-    if not previous:
-        return set()
-    now_counts = Counter(topic_of(row) for row in current)
-    then_counts = Counter(topic_of(row) for row in previous)
+def _ramai_topics(current: list, previous: list) -> tuple[set[str], str]:
+    """Kembalikan (topik ramai, catatan metode). Bila periode sebelumnya kosong, bagi jendela saat ini dua bagian."""
+    compare_note = "dibanding periode sebelumnya"
+    prev = list(previous)
+    curr = list(current)
+    if not prev and len(curr) >= 8:
+        ordered = sorted(curr, key=lambda row: getattr(row, "published_at", None) or datetime.min)
+        mid = max(1, len(ordered) // 2)
+        prev = ordered[:mid]
+        curr = ordered[mid:]
+        compare_note = "dibanding paruh awal rentang tanggal yang sama (periode sebelumnya kosong)"
+    if not prev:
+        return set(), "Ramai belum dihitung: data pembanding belum cukup."
+    now_counts = Counter(topic_of(row) for row in curr)
+    then_counts = Counter(topic_of(row) for row in prev)
     chosen = set()
     for topic, count in now_counts.items():
         before = then_counts.get(topic, 0)
@@ -613,7 +650,11 @@ def _ramai_topics(current: list, previous: list) -> set[str]:
             continue
         if before == 0 or count >= before * 2:
             chosen.add(topic)
-    return chosen
+    note = (
+        f"Topik dihitung ramai bila ≥3 konten dan volume {compare_note} naik ≥2× (atau baru muncul). "
+        "Pangsa = bagian dari konten yang terkumpul di DANITA, bukan seluruh internet."
+    )
+    return chosen, note
 
 
 def matches(row, topic: str = "", segment: str = "", area: str = "") -> bool:
@@ -632,15 +673,25 @@ def matches(row, topic: str = "", segment: str = "", area: str = "") -> bool:
 def snapshot(current: list, previous: list, topic: str = "", segment: str = "", area: str = "") -> dict:
     current_rows = [row for row in current if matches(row, topic, segment, area)]
     previous_rows = [row for row in previous if matches(row, topic, segment, area)]
-    ramai = _ramai_topics(current_rows, previous_rows)
+    ramai, aturan_ramai = _ramai_topics(current_rows, previous_rows)
     described = []
     for row in current_rows:
         info = describe_mention(row)
+        voices = list(info["voices"])
+        labels = list(info["voice_labels"])
         if info["topic"] in ramai:
-            info = {**info, "voices": [*info["voices"], "ramai"], "voice_labels": [*info["voice_labels"], VOICE_LABEL["ramai"]]}
+            voices = [*voices, "ramai"]
+            labels = [*labels, VOICE_LABEL["ramai"]]
+        if not info["voices"]:
+            # Residual: berita tanpa sinyal keluhan/apresiasi/kebutuhan/hoaks.
+            voices = [*voices, "informatif"] if "informatif" not in voices else voices
+            if VOICE_LABEL["informatif"] not in labels:
+                labels = [VOICE_LABEL["informatif"], *labels]
+        info = {**info, "voices": voices, "voice_labels": labels}
         described.append((row, info))
     composition = []
-    for key in ("ramai", *VOICES):
+    # Urutan baca: sinyal isi dulu, lalu residual, lalu lonjakan volume.
+    for key in (*VOICES, "informatif", "ramai"):
         members = [row for row, info in described if key in info["voices"]]
         composition.append({
             "id": key,
@@ -661,14 +712,16 @@ def snapshot(current: list, previous: list, topic: str = "", segment: str = "", 
         "narasi": _narratives(described),
         "topik_ramai": sorted(ramai),
         "siklus_isu": len(by_issue),
-        "ramai_tersedia": bool(previous_rows),
-        "aturan_ramai": (
-            "Topik dihitung ramai bila minimal 3 konten dan jumlahnya minimal dua kali periode sebelumnya. Pangsa dihitung dari konten yang terkumpul, bukan dari seluruh percakapan internet."
-            if previous_rows
-            else "Ramai belum bisa dihitung: periode sebelumnya belum punya data pembanding. Angka tidak diisi tebakan."
-        ),
+        # True bila metode ramai bisa dijalankan (ada pembanding atau jendela cukup panjang).
+        "ramai_tersedia": bool(previous_rows) or len(current_rows) >= 8,
+        "aturan_ramai": aturan_ramai,
         "disclaimer": DISCLAIMER,
-        "metode": "Dimensi bisa tumpang tindih. Ramai adalah sinyal volume, bukan isi keluhan. Segmen dibaca dari kata di konten, bukan dari identitas akun.",
+        "metode": (
+            "Dimensi isi (keluhan/apresiasi/kebutuhan/hoaks) bisa tumpang tindih. "
+            "Informatif = konten tanpa sinyal empat dimensi itu. "
+            "Ramai = lonjakan volume topik, bukan jenis keluhan. "
+            "Segmen dan wilayah dibaca dari kata di konten, bukan profil akun."
+        ),
     }
 
 
