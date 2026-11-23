@@ -72,8 +72,8 @@ def ingest_lite(db: Session) -> dict:
         keywords = db.query(Keyword).all()
         queries = db.query(SavedQuery).all()
         rules = load_rules(db)
-        # Jendela 7 hari — jangan pakai last_ingest-6jam (terlalu sempit, feed sering kosong).
-        since = now_wib() - timedelta(days=7)
+        # Jendela 30 hari agar Suara Publik / Ringkasan tidak "kosong" saat feed terlambat tanggal.
+        since = now_wib() - timedelta(days=30)
 
         # Budget ketat: Vercel Hobby memutus ~60s (sering 504). Selesai lebih awal = HTTP 200.
         BUDGET_SOCIAL = 8

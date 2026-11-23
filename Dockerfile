@@ -1,6 +1,6 @@
 FROM node:20-bookworm-slim AS web
 WORKDIR /src/frontend
-ARG FRONTEND_CACHEBUST=rubrik-1y-20261123
+ARG FRONTEND_CACHEBUST=suara-90d-20261123
 RUN echo "frontend_cachebust=$FRONTEND_CACHEBUST"
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -r
 COPY backend/requirements.txt backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 # Bust cache backend saat rubrik/ingest berubah.
-ARG CACHEBUST=merek-duplikasi-hukum-20261123
+ARG CACHEBUST=suara-90d-20261123
 RUN echo "cachebust=$CACHEBUST"
 COPY backend/ backend/
 # SPA build: app.main DIST = /app/frontend/dist (parents[2] dari backend/app/main.py)

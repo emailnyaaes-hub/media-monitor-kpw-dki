@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApi } from '../api'
 import ChartInsight from '../components/ChartInsight'
@@ -51,6 +51,17 @@ export default function SuaraPage() {
   const voiceQuery = new URLSearchParams({ topic, segment, area }).toString()
   const filtered = Boolean(topic || segment || area)
   const max = topics.data?.words[0]?.value || 1
+  const autoExpanded = useRef(false)
+
+  // Jika jendela filter terlalu sempit (0 konten), perluas ke 90 hari sekali.
+  useEffect(() => {
+    if (autoExpanded.current) return
+    if (data.loading || !data.data) return
+    if (data.data.total > 0) return
+    if (topic || segment || area) return
+    autoExpanded.current = true
+    filters.setPreset(90)
+  }, [data.loading, data.data, topic, segment, area, filters])
 
   return (
     <div>
@@ -127,7 +138,19 @@ export default function SuaraPage() {
         </div>
       )}
 
-      {data.data && data.data.total === 0 && <Card className="mb-4"><Empty label="Belum ada konten eksternal untuk pilihan ini. Ubah filter atau rentang tanggal." /></Card>}
+      {data.data && data.data.total === 0 && (
+        <Card className="mb-4 space-y-3">
+          <Empty label="Belum ada konten eksternal pada rentang tanggal ini. Coba perluas ke 90 hari atau 1 tahun." />
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="h-9 rounded-md border border-line px-3 text-sm" onClick={() => filters.setPreset(90)}>
+              90 hari terakhir
+            </button>
+            <button type="button" className="h-9 rounded-md border border-line px-3 text-sm" onClick={() => filters.setPreset(365)}>
+              1 tahun terakhir
+            </button>
+          </div>
+        </Card>
+      )}
       {data.data && data.data.total > 0 && (
         <div className="mb-4 grid gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2">

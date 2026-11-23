@@ -29,8 +29,12 @@ interface Filters {
 
 const FilterContext = createContext<Filters | null>(null)
 
+/** Default 90 hari — jendela 30 hari sering kosong jika berita terbaru di DB lebih tua dari sebulan. */
+const DEFAULT_RANGE_DAYS = 90
+const FILTER_STORE_KEY = 'bi-filters-v2'
+
 function initialRange() {
-  const stored = sessionStorage.getItem('bi-filters')
+  const stored = sessionStorage.getItem(FILTER_STORE_KEY)
   if (stored) {
     try {
       const parsed = JSON.parse(stored) as { dateFrom: string; dateTo: string; platform: string; category: string }
@@ -41,7 +45,7 @@ function initialRange() {
   }
   const end = new Date()
   const start = new Date()
-  start.setDate(end.getDate() - 29)
+  start.setDate(end.getDate() - (DEFAULT_RANGE_DAYS - 1))
   return { dateFrom: isoDate(start), dateTo: isoDate(end), platform: 'semua', category: 'semua' }
 }
 
@@ -64,7 +68,7 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
     params.set('date_to', dateTo)
     if (platform !== 'semua') params.set('platform', platform)
     if (category !== 'semua') params.set('category', category)
-    sessionStorage.setItem('bi-filters', JSON.stringify({ dateFrom, dateTo, platform, category }))
+    sessionStorage.setItem(FILTER_STORE_KEY, JSON.stringify({ dateFrom, dateTo, platform, category }))
     return {
       dateFrom,
       dateTo,
@@ -87,7 +91,7 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
         clearGeneral()
         const end = new Date()
         const start = new Date()
-        start.setDate(end.getDate() - 29)
+        start.setDate(end.getDate() - (DEFAULT_RANGE_DAYS - 1))
         setDateFrom(isoDate(start))
         setDateTo(isoDate(end))
         setPlatform('semua')
