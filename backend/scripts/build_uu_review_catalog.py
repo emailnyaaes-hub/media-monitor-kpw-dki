@@ -35,7 +35,7 @@ PAGE_LIMIT = {"UU P2SK.pdf": 90, "UU_NO_13_2016_REV-SEP26_KNSUM.pdf": 80}
 THEMES = {
     "Merek dan Indikasi Geografis": {
         "tema": ["merek", "indikasi geografis", "pendaftaran merek", "pelanggaran merek", "meniru", "duplikasi"],
-        "larangan_bahasa": r"duplikasi|meniru|menyalin|memalsukan|menggunakan merek terdaftar",
+        "larangan_bahasa": r"duplikasi|menduplikasikan|menduplikasi|meniru|menyalin|menjiplak|memalsukan|merek terkenal|merek terdaftar|menggunakan merek terdaftar",
         "cocok_bahasa": r"merek|indikasi geografis|pendaftaran|DJKI|HAKI",
     },
     "Hak Cipta": {

@@ -611,9 +611,10 @@ def search_mentions(db: Session, window: dict, params: dict) -> dict:
     from app.services.news_sections import classify_feed_section, select_for_feed_section
 
     feed_section = (params.get("feed_section") or "").strip()
-    # Rubrik tematik: otomatis longgarkan ke 1 tahun (frontend lama sering kirim 30 hari).
+    # KPw DKI / KPwBI / Pemprov DKI: rentang wajib 1 tahun ke belakang.
+    YEAR_SECTIONS = frozenset({"kpw_dki", "kpw_provinsi", "pemprov_dki"})
     work = dict(window)
-    if feed_section and feed_section != "beranda":
+    if feed_section in YEAR_SECTIONS:
         end_date = work["date_to"]
         start_date = end_date - timedelta(days=365)
         if work["date_from"] > start_date:

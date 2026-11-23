@@ -17,6 +17,9 @@ const RUBRIK = [
   { id: 'pemprov_dki', label: 'Pemprov DKI Jakarta' },
 ] as const
 
+/** Rubrik ini selalu menampilkan berita 1 tahun ke belakang. */
+const YEAR_RUBRIK = new Set<string>(['kpw_dki', 'kpw_provinsi', 'pemprov_dki'])
+
 export default function OverviewPage() {
   const filters = useFilters()
   const navigate = useNavigate()
@@ -25,11 +28,13 @@ export default function OverviewPage() {
   const mentionQuery = (() => {
     const params = new URLSearchParams(filters.query)
     params.set('feed_section', rubrik)
-    const end = new Date()
-    const start = new Date()
-    start.setFullYear(end.getFullYear() - 1)
-    params.set('date_from', isoDate(start))
-    params.set('date_to', isoDate(end))
+    if (YEAR_RUBRIK.has(rubrik)) {
+      const end = new Date()
+      const start = new Date()
+      start.setFullYear(end.getFullYear() - 1)
+      params.set('date_from', isoDate(start))
+      params.set('date_to', isoDate(end))
+    }
     return params.toString()
   })()
   const overview = useApi<Overview>(`/api/overview?${filters.query}`)
@@ -44,7 +49,15 @@ export default function OverviewPage() {
   const aktif = rubrik
 
   function openAll() {
-    navigate(`/explorer?feed_section=${encodeURIComponent(rubrik)}`)
+    const q = new URLSearchParams({ feed_section: rubrik })
+    if (YEAR_RUBRIK.has(rubrik)) {
+      const end = new Date()
+      const start = new Date()
+      start.setFullYear(end.getFullYear() - 1)
+      q.set('date_from', isoDate(start))
+      q.set('date_to', isoDate(end))
+    }
+    navigate(`/explorer?${q.toString()}`)
   }
 
   return (

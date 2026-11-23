@@ -125,11 +125,32 @@ class ReviewTests(unittest.TestCase):
                 "",
             )
         self.assertGreater(len(result["findings"]), 0)
-        self.assertIn("menghasilkan", result["revised"])
+        # Kalimat anjuran merek diganti penuh saran hukum; typo «menghasilkaq» ikut hilang.
         self.assertNotIn("menghasilkaq", result["revised"].casefold())
+        self.assertRegex(result["revised"].casefold(), r"mendaftarkan merek|tidak meniru")
         blob = " ".join(item["masalah"] + item.get("dasar_hukum", "") for item in result["findings"]).lower()
         self.assertIn("merek", blob)
-        self.assertIn("implikasi_hukum", result["counts"])
+        self.assertGreaterEqual(result["counts"].get("implikasi_hukum", 0), 1)
+        self.assertEqual(result["status"], "Berisiko Tinggi")
+
+    def test_merek_menduplikasikan_terkenal_anak_jakarte(self):
+        """Anjuran menduplikasikan merek terkenal harus kena implikasi hukum Tinggi."""
+        draft = (
+            "Hi Anak Jakarte,\n"
+            "Untuk meningkatkan ekonomi Daerah dan perputaran ekonomi DKI Jakarta, maka UMKM dapat "
+            "melindungi merek-mereknya dengan mendaftarkannya agar memiliki hak eksklusif. Terlebih, "
+            "dapat menduplikasikan merek-merek terkenal sehingga mendapatkan manfaat ekonomi dari "
+            "merek terkenal tersebut."
+        )
+        with mock.patch.dict(os.environ, {"LLM_API_KEY": ""}):
+            result = review(draft, "siaran", "")
+        self.assertGreaterEqual(result["counts"].get("implikasi_hukum", 0), 1)
+        self.assertEqual(result["status"], "Berisiko Tinggi")
+        blob = " ".join(
+            (item.get("masalah") or "") + (item.get("dasar_hukum") or "") for item in result["findings"]
+        ).lower()
+        self.assertTrue("merek" in blob and ("duplikas" in blob or "peniruan" in blob or "uu" in blob))
+        self.assertNotRegex(result["revised"].casefold(), r"menduplikasikan\s+merek")
 
     def test_wrong_pasal_substance_and_language(self):
         with mock.patch.dict(os.environ, {"LLM_API_KEY": ""}):

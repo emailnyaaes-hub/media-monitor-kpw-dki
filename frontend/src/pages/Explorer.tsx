@@ -29,8 +29,18 @@ export default function ExplorerPage() {
   }, [params])
 
   const feedSection = params.get('feed_section') || ''
+  const YEAR_SECTIONS = new Set(['kpw_dki', 'kpw_provinsi', 'pemprov_dki'])
   const query = new URLSearchParams(filters.query)
   if (feedSection) query.set('feed_section', feedSection)
+  // KPw DKI / KPwBI / Pemprov: paksa rentang 1 tahun (abaikan filter global 30 hari).
+  if (YEAR_SECTIONS.has(feedSection)) {
+    const end = new Date()
+    const start = new Date()
+    start.setFullYear(end.getFullYear() - 1)
+    const iso = (d: Date) => d.toISOString().slice(0, 10)
+    query.set('date_from', params.get('date_from') || iso(start))
+    query.set('date_to', params.get('date_to') || iso(end))
+  }
   if (q) query.set('q', q)
   if (sentiment) query.set('sentiment', sentiment)
   if (stance) query.set('stance', stance)

@@ -567,16 +567,19 @@ def _regulasi_tambah(hapus: str, suggestion: str, sentence: str = "") -> str | N
                 return re.sub(rf"\b{re.escape(key)}\b", repl, sentence, count=1, flags=re.I).strip()
     if fragment == "undang undagan" or "undagan" in fragment:
         return "undang-undang"
-    if "duplikasi merek" in fragment or "meniru merek" in fragment:
+    if re.search(r"duplikas|meniru\s+merek|menyalin\s+merek|merek\s+terkenal|merek\s+terdaftar", fragment, re.I):
         if sentence:
             return re.sub(
-                r"\b(duplikasi|menduplikasi|meniru|menyalin|memalsukan)\s+merek\b(?:\s+yang\s+sudah\s+terdaftar)?",
-                "mendaftarkan merek sendiri secara resmi (bukan meniru merek terdaftar)",
+                r"\b(?:dapat|bisa|boleh)?\s*"
+                r"(?:menduplikasikan|menduplikasi|duplikasi|meniru|menyalin|menjiplak|memalsukan)\s+"
+                r"merek(?:[-\s]?merek)?(?:\s+(?:yang\s+)?(?:sudah\s+)?(?:terdaftar|terkenal))?"
+                r"(?:[^\n.]*?(?:manfaat\s+ekonomi|keuntungan)[^\n.]*)?",
+                "mendaftarkan merek sendiri secara resmi dan tidak meniru merek terkenal/terdaftar pihak lain",
                 sentence,
                 count=1,
                 flags=re.I,
             ).strip()
-        return "mendaftarkan merek sendiri secara resmi"
+        return "mendaftarkan merek sendiri secara resmi dan tidak meniru merek pihak lain"
     return None
 
 

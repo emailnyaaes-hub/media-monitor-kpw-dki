@@ -169,15 +169,29 @@ IMPLIKASI_SUBSTANSI = [
     ),
     (
         re.compile(
-            r"\b(menyarankan|menganjurkan)\b[^\n.]{0,120}\b(duplikasi|menduplikasi|meniru)\s+merek\b[^\n.]{0,80}\bterdaftar\b",
+            # Tangkap anjuran/ajakan meniru, menduplikasi(kan), menyalin, menjiplak merek
+            # (terdaftar / terkenal / pihak lain) — tidak wajib kata «menyarankan».
+            r"(?:"
+            r"\b(?:dapat|bisa|boleh|agar|untuk|dengan|lalu|serta|dan)?\s*"
+            r"(?:menduplikasikan|menduplikasi|menduplikat|duplikasi|meniru|menyalin|menjiplak|memalsukan|menjiplak)\s+"
+            r"merek(?:[-\s]?merek)?(?:\s+(?:yang\s+)?(?:sudah\s+)?(?:terdaftar|terkenal|orang\s+lain|pihak\s+lain))?"
+            r"|"
+            r"\b(?:menyarankan|menganjurkan|mengimbau|mengajak)\b[^\n.]{0,140}"
+            r"\b(?:duplikasi|menduplikasikan|menduplikasi|meniru|menyalin|menjiplak)\s+merek\b"
+            r"|"
+            r"\bmanfaat\s+ekonomi\s+dari\s+merek\s+(?:terkenal|terdaftar)\b"
+            r"|"
+            r"\bmenggunakan\s+merek\s+(?:terkenal|terdaftar)\s+(?:pihak\s+lain|orang\s+lain)?\b"
+            r")",
             re.I | re.S,
         ),
         "Tinggi",
-        "Draf menyarankan duplikasi/peniruan merek terdaftar — berpotensi melanggar UU Merek dan Indikasi Geografis.",
-        "UU No. 20 Tahun 2016 tentang Merek dan Indikasi Geografis. Perlu verifikasi tim Hukum.",
-        "Kami mengimbau pelaku UMKM mendaftarkan merek sendiri secara resmi dan tidak meniru merek terdaftar pihak lain, "
-        "agar usaha berkembang sesuai ketentuan perlindungan merek.",
-        "Anjuran peniruan merek dapat dikenai sanksi pidana dan perdata serta merusak citra kelembagaan.",
+        "Draf menganjurkan/menyebut duplikasi atau peniruan merek (terkenal/terdaftar) — indikasi pelanggaran UU Merek.",
+        "UU No. 20 Tahun 2016 tentang Merek dan Indikasi Geografis (hak eksklusif pemilik merek; larangan memakai merek "
+        "pihak lain tanpa hak). Perlu verifikasi tim Hukum.",
+        "Kami mengimbau pelaku UMKM mendaftarkan merek sendiri secara resmi dan tidak meniru atau menduplikasi merek "
+        "terkenal/terdaftar milik pihak lain, agar usaha berkembang sesuai ketentuan perlindungan merek.",
+        "Anjuran peniruan/duplikasi merek dapat dikenai sanksi pidana dan perdata serta merusak citra kelembagaan.",
     ),
     (
         re.compile(
@@ -437,7 +451,11 @@ def _pattern_checks(
             sentence = text[s_start:s_end].strip()
             hapus = text[span_start:span_end]
             tambah = None
-            if "merek" in problem.lower() and "menyarankan" in sentence.casefold():
+            if "merek" in problem.lower() and re.search(
+                r"duplikas|meniru|menyalin|menjiplak|merek\s+terkenal|merek\s+terdaftar|manfaat\s+ekonomi\s+dari\s+merek",
+                sentence,
+                re.I,
+            ):
                 hapus = sentence.strip()
                 tambah = saran
                 span_start, span_end = s_start, s_end
