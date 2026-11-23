@@ -31,8 +31,10 @@ def quadrant(impact_level: str, velocity: float) -> str:
 
 
 def mention_card(row: Mention) -> dict:
-    stored = (getattr(row, "feed_section", None) or "").strip()
-    section = stored if stored in FEED_SECTION_LABELS else classify_feed_section(row)
+    # Selalu klasifikasi live agar label rubrik tidak tertinggal / kotor di DB.
+    section = classify_feed_section(row)
+    if section not in FEED_SECTION_LABELS:
+        section = "beranda"
     return {
         "id": row.id,
         "title": row.title,

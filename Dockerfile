@@ -10,6 +10,9 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -rf /var/lib/apt/lists/*
 COPY backend/requirements.txt backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
+# Bust cache backend saat rubrik/ingest berubah.
+ARG CACHEBUST=render-rubrik-v9-20261123
+RUN echo "cachebust=$CACHEBUST"
 COPY backend/ backend/
 # SPA build: app.main DIST = /app/frontend/dist (parents[2] dari backend/app/main.py)
 COPY --from=web /src/frontend/dist frontend/dist

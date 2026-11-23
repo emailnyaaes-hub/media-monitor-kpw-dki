@@ -191,6 +191,13 @@ def ingest_lite(db: Session) -> dict:
         else:
             log.warning("lewati evaluasi EWS: budget waktu habis (%.1fs)", time.monotonic() - t0)
 
+        retagged = 0
+        if time.monotonic() - t0 < BUDGET_HARD + 8:
+            try:
+                retagged = retag_feed_sections(db)
+            except Exception:
+                log.exception("retag feed_section setelah ingest_lite gagal")
+
         return {
             "status": "selesai",
             "mode": "cepat",
@@ -200,6 +207,7 @@ def ingest_lite(db: Session) -> dict:
             "rejected": rejected,
             "invalid_url": invalid,
             "alerts": alerts_n,
+            "retagged_sections": retagged,
             "issues": 0,
             "connectors": summaries,
             "elapsed_ms": int((time.monotonic() - t0) * 1000),
@@ -563,6 +571,21 @@ def status_payload(db: Session) -> dict:
             for row in connector_rows
         ],
     }
+
+
+def retag_feed_sections(db: Session) -> int:
+    """Tulis ulang feed_section dari klasifikasi live (rapikan rubrik yang tercampur)."""
+    from app.services.news_sections import classify_feed_section
+
+    changed = 0
+    for row in db.query(Mention).all():
+        live = classify_feed_section(row)
+        if (row.feed_section or "beranda") != live:
+            row.feed_section = live
+            changed += 1
+    if changed:
+        db.commit()
+    return changed
 
 
 def retag(db: Session) -> int:

@@ -169,7 +169,7 @@ def health(db: Session = Depends(get_db)):
             or ""
         )[:12]
         or "local",
-        "features": ["feed_section_v1", "mention_brief", "pemprov_official_v3b"],
+        "features": ["feed_section_v9", "mention_brief", "pemprov_official_v3b"],
         "pemprov_fetcher": _pemprov_fetcher_version(),
         "disclaimer": DISCLAIMER,
     }

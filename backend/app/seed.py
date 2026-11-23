@@ -84,11 +84,12 @@ def seed(db: Session) -> None:
 
     ensure_defaults(db)
     _ensure_catalog_updates(db)
-    if db.get(AppMeta, "feed_section_v8") is None:
-        from app.services.pipeline import retag
+    # v9: pemisahan ketat KPw DKI vs Pemprov vs KPw daerah.
+    if db.get(AppMeta, "feed_section_v9") is None:
+        from app.services.pipeline import retag_feed_sections
 
-        retag(db)
-        db.merge(AppMeta(key="feed_section_v8", value=now_wib().isoformat(timespec="seconds")))
+        retag_feed_sections(db)
+        db.merge(AppMeta(key="feed_section_v9", value=now_wib().isoformat(timespec="seconds")))
     db.merge(AppMeta(key="data_mode", value="live"))
     db.commit()
 

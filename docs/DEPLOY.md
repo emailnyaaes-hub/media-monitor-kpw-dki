@@ -1,33 +1,40 @@
-# Deploy Danita
+# Deploy Danita — Render (utama)
 
-## Produksi saat ini: Cloudflare Tunnel (dari Mac/VPS)
+## URL produksi
 
-App jalan di mesin lokal (`uvicorn` :8000), dipublikasikan lewat **Cloudflare Quick Tunnel**.
+**https://media-monitor-kpw-dki.onrender.com**
+
+Akun default seed: `admin` / `admin123`
+
+## Cara kerja
+
+Satu container Docker (`Dockerfile`) = frontend Vite + backend FastAPI.
+
+- Push ke `main` → auto-deploy Render
+- Free Render: sleep ~15 menit idle; GitHub Actions tiap 2 jam bangunkan + `/api/cron/ingest`
+- Database: set `BI_DATABASE_URL` (Neon) di Environment service agar data tidak hilang
+
+## Env wajib di Render
+
+| Key | Isi |
+|---|---|
+| `BI_DATABASE_URL` | URL Neon Postgres |
+| `CRON_SECRET` | Sama dengan secret GitHub Actions |
+| `BI_FAST_INGEST` | `1` |
+| `BI_SKIP_URL_PROBE` | `1` |
+| `BI_DISABLE_SCHEDULER` | `1` (ingest lewat Actions) |
+
+## Verifikasi
 
 ```bash
-./scripts/tunnel-start.sh
-# URL muncul di terminal + .tools/run/tunnel-url.txt
+BASE=https://media-monitor-kpw-dki.onrender.com
+curl -sS -m 90 "$BASE/api/health"
+# build harus = commit SHA terbaru di main
 ```
 
-- Mac/VPS **harus tetap menyala** dan terhubung internet.
-- Quick tunnel (`*.trycloudflare.com`) **URL berubah** tiap restart.
-- Untuk URL tetap: buat Named Tunnel di akun Cloudflare + domain, lalu arahkan ke `http://127.0.0.1:8000`.
-- Database: set `BI_DATABASE_URL` (Neon) di environment shell sebelum start, agar data tidak hanya di SQLite lokal.
+## Cadangan
 
-Stop:
-
-```bash
-kill "$(cat .tools/run/tunnel.pid)" "$(cat .tools/run/danita.pid)"
-```
-
-## Cadangan lain
-
-| Platform | URL | Catatan |
-|---|---|---|
-| Render | https://media-monitor-kpw-dki.onrender.com | Free bisa sleep; butuh `BI_DATABASE_URL` |
-| Vercel | https://media-monitor-kpw-dki.vercel.app | Sering di-pause kuota Hobby |
-
-## Ingest otomatis
-
-- Di mode tunnel (bukan Vercel): penjadwal proses tiap 2 jam aktif di mesin yang menjalankan app.
-- GitHub Actions tetap bisa memanggil `/api/cron/ingest` jika secret `APP_URL` diisi URL tunnel terkini.
+| Platform | Catatan |
+|---|---|
+| Cloudflare Tunnel | Hanya jika Mac/VPS lokal selalu nyala (`./scripts/tunnel-start.sh`) |
+| Vercel | Sering di-pause kuota Hobby |
